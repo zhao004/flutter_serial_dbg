@@ -1,0 +1,221 @@
+{
+  "source": "README.md",
+  "status": "provisional_pending_apk",
+  "aa55Profile": "AA55 | CMD | LEN | PAYLOAD | XOR(CMD..PAYLOAD)",
+  "hexCases": [
+    {
+      "name": "uppercase bytes with spaces",
+      "input": "AA 55",
+      "expected": "AA 55"
+    },
+    {
+      "name": "lowercase bytes with spaces",
+      "input": "de ad be ef",
+      "expected": "DE AD BE EF"
+    },
+    {
+      "name": "compact lowercase bytes",
+      "input": "0102ab",
+      "expected": "01 02 AB"
+    },
+    {
+      "name": "mixed ascii whitespace",
+      "input": "0a\t0B\r\n0c",
+      "expected": "0A 0B 0C"
+    }
+  ],
+  "invalidHexCases": [
+    {
+      "name": "empty input",
+      "input": "",
+      "error": "empty"
+    },
+    {
+      "name": "whitespace only input",
+      "input": " \n\t ",
+      "error": "empty"
+    },
+    {
+      "name": "odd character count",
+      "input": "ABC",
+      "error": "oddHexLength"
+    },
+    {
+      "name": "non hex character",
+      "input": "GG",
+      "error": "invalidHexCharacter"
+    },
+    {
+      "name": "hex prefix is rejected",
+      "input": "0xAA",
+      "error": "invalidHexCharacter"
+    }
+  ],
+  "textCases": [
+    {
+      "name": "ascii without crlf",
+      "input": "OK",
+      "appendCrlf": false,
+      "expected": "4F 4B"
+    },
+    {
+      "name": "ascii with crlf",
+      "input": "OK",
+      "appendCrlf": true,
+      "expected": "4F 4B 0D 0A"
+    },
+    {
+      "name": "utf8 payload",
+      "input": "你好",
+      "appendCrlf": false,
+      "expected": "E4 BD A0 E5 A5 BD"
+    },
+    {
+      "name": "mixed ascii and utf8",
+      "input": "A你",
+      "appendCrlf": false,
+      "expected": "41 E4 BD A0"
+    }
+  ],
+  "frameCases": [
+    {
+      "name": "single empty payload",
+      "chunks": ["AA 55 01 00 01"],
+      "events": [
+        {
+          "type": "frame",
+          "command": 1,
+          "payload": ""
+        }
+      ]
+    },
+    {
+      "name": "single byte payload",
+      "chunks": ["AA 55 10 01 01 10"],
+      "events": [
+        {
+          "type": "frame",
+          "command": 16,
+          "payload": "01"
+        }
+      ]
+    },
+    {
+      "name": "multiple byte payload",
+      "chunks": ["AA 55 02 03 0A 0B 0C 0C"],
+      "events": [
+        {
+          "type": "frame",
+          "command": 2,
+          "payload": "0A 0B 0C"
+        }
+      ]
+    },
+    {
+      "name": "unknown command remains raw",
+      "chunks": ["AA 55 7F 02 FF 00 82"],
+      "events": [
+        {
+          "type": "frame",
+          "command": 127,
+          "payload": "FF 00"
+        }
+      ]
+    },
+    {
+      "name": "header split across chunks",
+      "chunks": ["AA", "55 01 00 01"],
+      "events": [
+        {
+          "type": "frame",
+          "command": 1,
+          "payload": ""
+        }
+      ]
+    },
+    {
+      "name": "length and payload split across chunks",
+      "chunks": ["AA 55 10", "01", "01", "10"],
+      "events": [
+        {
+          "type": "frame",
+          "command": 16,
+          "payload": "01"
+        }
+      ]
+    },
+    {
+      "name": "two sticky frames",
+      "chunks": ["AA 55 01 00 01 AA 55 10 01 01 10"],
+      "events": [
+        {
+          "type": "frame",
+          "command": 1,
+          "payload": ""
+        },
+        {
+          "type": "frame",
+          "command": 16,
+          "payload": "01"
+        }
+      ]
+    },
+    {
+      "name": "noise before frame",
+      "chunks": ["00 FF 7E AA 55 01 00 01"],
+      "events": [
+        {
+          "type": "frame",
+          "command": 1,
+          "payload": ""
+        }
+      ]
+    },
+    {
+      "name": "duplicate partial header prefix",
+      "chunks": ["AA AA 55 01 00 01"],
+      "events": [
+        {
+          "type": "frame",
+          "command": 1,
+          "payload": ""
+        }
+      ]
+    },
+    {
+      "name": "checksum mismatch",
+      "chunks": ["AA 55 01 00 00"],
+      "events": [
+        {
+          "type": "rejection",
+          "reason": "checksumMismatch"
+        }
+      ]
+    },
+    {
+      "name": "invalid frame followed by valid frame",
+      "chunks": ["AA 55 01 00 00 AA 55 10 01 01 10"],
+      "events": [
+        {
+          "type": "rejection",
+          "reason": "checksumMismatch"
+        },
+        {
+          "type": "frame",
+          "command": 16,
+          "payload": "01"
+        }
+      ]
+    },
+    {
+      "name": "incomplete frame emits nothing",
+      "chunks": ["AA 55 10 01"],
+      "events": []
+    },
+    {
+      "name": "noise only emits nothing",
+      "chunks": ["01 02 03 04"],
+      "events": []
+    }
+  ]
+}

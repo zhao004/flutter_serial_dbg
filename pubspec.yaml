@@ -1,0 +1,41 @@
+name: flutter_serial_dbg
+description: "SerialDbg：Android 优先的串口与网络调试工具。"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.13.7
+
+dependencies:
+  flutter:
+    sdk: flutter
+  get_it: ^9.3.0
+  go_router: ^18.1.2
+  signals: ^7.1.0
+  drift: ^2.24.0
+  path_provider: ^2.1.2
+  sqlite3_flutter_libs: ^0.5.20
+  json_annotation: ^4.9.0
+  file_selector: ^1.1.0
+  flutter_blue_plus: ^2.3.14
+  permission_handler: 12.0.1
+  skio_usb_serial: 0.2.1
+  flex_color_scheme: 9.0.0
+  material_ui: 1.9.0
+  toastification: 3.2.2
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_launcher_icons: "^0.14.4"
+  flutter_lints: ^6.0.0
+  build_runner: ^2.6.0
+  drift_dev: ^2.24.0
+  json_serializable: ^6.10.0
+
+flutter_launcher_icons:
+  android: "ic_launcher"
+  image_path: "assets/icon/icon.png"
+  min_sdk_android: 21 # android min sdk min:16, default 21
+
+flutter:
+  uses-material-design: true
