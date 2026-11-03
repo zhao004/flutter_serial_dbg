@@ -1,7 +1,6 @@
 # SerialDbg
 
-SerialDbg 是 Android 优先的原生 Flutter 串口与网络调试客户端，用于
-逐步替代原 DCloud uni-app 实现。应用将 USB 串口、BLE、TCP 和 UDP 统一到同一个
+SerialDbg 是 Android 优先的原生 Flutter 串口与网络调试客户端。应用将 USB 串口、BLE、TCP 和 UDP 统一到同一个
 通信工作台，以原始字节方式完成文本/HEX 收发、日志记录与导出、网络诊断和主题
 配置。
 
