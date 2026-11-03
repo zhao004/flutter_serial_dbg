@@ -8,17 +8,11 @@ SerialDbg 是 Android 优先的原生 Flutter 串口与网络调试客户端。�
 
 ![img01.jpg](assets/images/img01.jpg)
 
-### INTERNET
+### 演示视频
 
-<video src="assets/videos/wifi.mp4" controls width="100%"></video>
-
-### BLE
-
-<video src="assets/videos/ble.mp4" controls width="100%"></video>
-
-### USB
-
-<video src="assets/videos/usb.mp4" controls width="100%"></video>
+| INTERNET                           | BLE                              | USB                              |
+|------------------------------------|----------------------------------|----------------------------------|
+| [wifi.mp4](assets/videos/wifi.mp4) | [ble.mp4](assets/videos/ble.mp4) | [usb.mp4](assets/videos/usb.mp4) |
 
 ## 功能列表
 
