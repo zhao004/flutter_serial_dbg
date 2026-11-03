@@ -25,6 +25,8 @@ import 'package:flutter_serial_dbg/main.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 
+const _appDisplayName = '串口调试助手';
+
 void main() {
   setUp(() async {
     await getIt.reset();
@@ -62,7 +64,7 @@ void main() {
     await tester.pumpWidget(const SerialDebugApp());
     await tester.pump();
 
-    expect(find.text('SerialDbg'), findsOneWidget);
+    expect(find.text(_appDisplayName), findsOneWidget);
     expect(find.text('未连接'), findsOneWidget);
     expect(
       getIt<HomeController>().selectedMode.value,
@@ -264,7 +266,7 @@ void main() {
 
     await tester.tap(find.byTooltip('返回'));
     await tester.pumpAndSettle();
-    expect(find.text('SerialDbg'), findsOneWidget);
+    expect(find.text(_appDisplayName), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -320,7 +322,7 @@ void main() {
     expect(find.text('设置'), findsOneWidget);
     await tester.tap(find.byTooltip('返回'));
     await tester.pumpAndSettle();
-    expect(find.text('SerialDbg'), findsOneWidget);
+    expect(find.text(_appDisplayName), findsOneWidget);
   });
 
   testWidgets('follows system brightness in system theme mode', (tester) async {
@@ -332,7 +334,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      Theme.of(tester.element(find.text('SerialDbg'))).brightness,
+      Theme.of(tester.element(find.text(_appDisplayName))).brightness,
       Brightness.dark,
     );
     expect(tester.takeException(), isNull);
@@ -542,7 +544,7 @@ void main() {
     await tester.pumpWidget(const SerialDebugApp());
     await tester.pumpAndSettle();
 
-    final context = tester.element(find.text('SerialDbg'));
+    final context = tester.element(find.text(_appDisplayName));
     for (var index = 1; index <= 4; index++) {
       AppToast.info(context, '提示$index');
     }
