@@ -36,7 +36,7 @@ class SerialDebugApp extends StatelessWidget {
         builder: (context) {
           final preset = appearance.themePreset.value;
           return MaterialApp.router(
-            title: 'SerialDbg',
+            title: '串口调试助手',
             debugShowCheckedModeBanner: false,
             theme: AppTheme.light(preset),
             darkTheme: AppTheme.dark(preset),
