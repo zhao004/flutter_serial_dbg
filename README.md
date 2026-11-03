@@ -59,11 +59,23 @@ SerialDbg 是 Android 优先的原生 Flutter 串口与网络调试客户端。�
   `InetAddress.isReachable()` 执行 Ping。
 - 设置页支持跟随系统、浅色和深色模式，以及 FlexColorScheme 配色预设。
 
+### 应用更新
+
+- 非 Debug 构建启动后会静默检查 GitHub 最新稳定 Release，有更新时显示版本说明；
+  设置页也可随时手动检查。
+- 更新只接受 `vX.Y.Z` 稳定标签，并按设备首选 ABI 选择对应 APK；下载后使用 GitHub
+  资产 SHA-256 摘要校验完整性。
+- 下载完成后由 Android 系统安装界面确认覆盖安装。首次更新前可能需要在系统设置中
+  允许“串口调试助手”安装未知来源应用。
+- “稍后”只抑制本次应用进程内的自动提示，下次启动仍会检查；Debug 构建允许手动
+  检查，但不会自动联网检查。
+
 ### 持久化与平台能力
 
 - Drift schema 版本为 `3`，保存每种模式最近一次连接配置、应用设置、外观设置和
   通信会话。
-- Android Manifest 声明网络、按 API 版本区分的 BLE 权限和可选 USB Host 能力。
+- Android Manifest 声明网络、按 API 版本区分的 BLE 权限、可选 USB Host 能力和应用
+  自更新安装权限。
 - 不申请全盘存储权限；BLE 和 USB Host 不是强制硬件特性。
 - `android:allowBackup="false"`、`android:usesCleartextTraffic="false"`。
 
@@ -90,8 +102,10 @@ lib/
       ble/                  BLE 权限、扫描和 GATT 选择
       usb/                  Android USB 串口服务
       diagnostics/          本机 IPv4 和 Ping 诊断
+      update/               GitHub Release、ABI 选择和 APK 安装适配
     database/               Drift 数据库、表、仓库和生成代码
     pages/                  首页、设置页及页面控制器
+      update/               更新状态、提示和版本弹窗
     widgets/                跨页面 Widget 和视觉组件
     theme/                  FlexColorScheme 主题和扩展色
     utils/                  常量、输入校验、格式化和 BLE UUID 工具
@@ -107,6 +121,8 @@ android/                    Android Host 工程、Manifest 和 MethodChannel
 - `lib/main.dart`：初始化依赖、加载外观和通信偏好、启动应用。
 - `lib/app/pages/home/home_controller.dart`：通信工作台状态和连接生命周期。
 - `lib/app/services/transport/transport.dart`：所有传输通道的统一契约。
+- `lib/app/services/update/app_update_service.dart`：稳定版检查、ABI 资产选择和
+  SHA-256 校验边界。
 - `lib/app/services/transport/transport_factory.dart`：按连接模式创建 Transport。
 - `lib/app/database/app_repository.dart`：数据库持久化边界。
 - `test/fixtures/protocol_vectors.json`：HEX、文本和 `AA55` 协议基线。
@@ -185,6 +201,11 @@ GitHub 仓库需要创建 `flutter_android_build` Environment，并配置以下 
 会逐个校验 APK 的 V2、V3 签名，Release 资产统一命名为
 `serialdbg-<tag>-<abi>.apk`，同时上传 `SHA256SUMS.txt`。Dart 符号文件仅作为
 Actions 产物保留 30 天，不进入 Release。
+
+应用内更新通过 GitHub Release API 读取 `browser_download_url` 和资产 `digest`。
+发布资产必须保留当前命名规则，且 GitHub 必须为 APK 返回合法的
+`sha256:<64位摘要>`；缺少摘要时客户端会拒绝下载。正式覆盖安装还要求新旧 APK
+使用相同签名，否则 Android 系统会拒绝安装。
 
 本地完全未设置上述签名环境变量时，Release 构建仍使用 debug 签名以便调试；
 正式发布必须由工作流注入发布签名。

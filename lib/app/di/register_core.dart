@@ -1,9 +1,16 @@
+import 'package:http/http.dart' as http;
+
 import '../database/app_repository.dart';
 import '../database/database.dart';
 import '../services/ble/ble_permission_service.dart';
 import '../services/ble/ble_scanner.dart';
 import '../services/diagnostics/network_diagnostics.dart';
 import '../services/logging/log_exporter.dart';
+import '../services/update/apk_installer.dart';
+import '../services/update/app_update_service.dart';
+import '../services/update/github_release_client.dart';
+import '../services/update/installed_app_info_provider.dart';
+import '../services/update/update_platform_service.dart';
 import '../services/usb/usb_serial_service.dart';
 import 'injector.dart';
 
@@ -41,6 +48,35 @@ void registerCore() {
     getIt.registerLazySingleton<UsbSerialService>(
       FlutterUsbSerialService.new,
       dispose: (service) => service.dispose(),
+    );
+  }
+  if (!getIt.isRegistered<GitHubReleaseClient>()) {
+    getIt.registerLazySingleton<GitHubReleaseClient>(
+      () => HttpGitHubReleaseClient(client: http.Client()),
+      dispose: (client) => client.close(),
+    );
+  }
+  if (!getIt.isRegistered<InstalledAppInfoProvider>()) {
+    getIt.registerLazySingleton<InstalledAppInfoProvider>(
+      PackageInfoInstalledAppInfoProvider.new,
+    );
+  }
+  if (!getIt.isRegistered<UpdatePlatformService>()) {
+    getIt.registerLazySingleton<UpdatePlatformService>(
+      AndroidUpdatePlatformService.new,
+    );
+  }
+  if (!getIt.isRegistered<ApkInstaller>()) {
+    getIt.registerLazySingleton<ApkInstaller>(OtaApkInstaller.new);
+  }
+  if (!getIt.isRegistered<AppUpdateService>()) {
+    getIt.registerLazySingleton<AppUpdateService>(
+      () => GitHubAppUpdateService(
+        releaseClient: getIt<GitHubReleaseClient>(),
+        installedAppInfoProvider: getIt<InstalledAppInfoProvider>(),
+        platformService: getIt<UpdatePlatformService>(),
+        apkInstaller: getIt<ApkInstaller>(),
+      ),
     );
   }
 }

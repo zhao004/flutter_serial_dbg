@@ -5,6 +5,7 @@ import 'package:flutter_serial_dbg/app/database/app_repository.dart';
 import 'package:flutter_serial_dbg/app/di/injector.dart';
 import 'package:flutter_serial_dbg/app/models/appearance_preferences.dart';
 import 'package:flutter_serial_dbg/app/models/app_preferences.dart';
+import 'package:flutter_serial_dbg/app/models/app_update.dart';
 import 'package:flutter_serial_dbg/app/models/ble_device_info.dart';
 import 'package:flutter_serial_dbg/app/models/connection_config.dart';
 import 'package:flutter_serial_dbg/app/models/connection_mode.dart';
@@ -14,16 +15,19 @@ import 'package:flutter_serial_dbg/app/models/text_encoding.dart';
 import 'package:flutter_serial_dbg/app/models/usb_serial_device_info.dart';
 import 'package:flutter_serial_dbg/app/pages/home/home_controller.dart';
 import 'package:flutter_serial_dbg/app/pages/settings/appearance_controller.dart';
+import 'package:flutter_serial_dbg/app/pages/update/update_controller.dart';
 import 'package:flutter_serial_dbg/app/services/diagnostics/network_diagnostics.dart';
 import 'package:flutter_serial_dbg/app/services/ble/ble_permission_service.dart';
 import 'package:flutter_serial_dbg/app/services/ble/ble_scanner.dart';
 import 'package:flutter_serial_dbg/app/services/logging/log_exporter.dart';
+import 'package:flutter_serial_dbg/app/services/update/app_update_service.dart';
 import 'package:flutter_serial_dbg/app/services/usb/usb_serial_service.dart';
 import 'package:flutter_serial_dbg/app/theme/app_theme.dart';
 import 'package:flutter_serial_dbg/app/widgets/app_toast.dart';
 import 'package:flutter_serial_dbg/main.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:pub_semver/pub_semver.dart';
 
 const _appDisplayName = '串口调试助手';
 
@@ -51,6 +55,16 @@ void main() {
     final usbSerialService = _FakeUsbSerialService();
     getIt.registerLazySingleton<UsbSerialService>(() => usbSerialService);
     addTearDown(usbSerialService.dispose);
+    await getIt.unregister<AppUpdateService>();
+    final appUpdateService = _FakeAppUpdateService();
+    getIt.registerLazySingleton<AppUpdateService>(() => appUpdateService);
+    addTearDown(appUpdateService.dispose);
+    await getIt.unregister<UpdateController>();
+    final updateController = UpdateController(appUpdateService);
+    getIt.registerLazySingleton<UpdateController>(
+      () => updateController,
+      dispose: (controller) => controller.dispose(),
+    );
   });
 
   tearDown(() async {
@@ -263,6 +277,8 @@ void main() {
     expect(find.text('主题配色'), findsOneWidget);
     expect(find.text('跟随系统'), findsOneWidget);
     expect(find.text('靛蓝'), findsOneWidget);
+    expect(find.text('版本更新'), findsOneWidget);
+    expect(find.text('当前 1.0.0 (1)'), findsOneWidget);
 
     await tester.tap(find.byTooltip('返回'));
     await tester.pumpAndSettle();
@@ -323,6 +339,78 @@ void main() {
     await tester.tap(find.byTooltip('返回'));
     await tester.pumpAndSettle();
     expect(find.text(_appDisplayName), findsOneWidget);
+  });
+
+  testWidgets('shows available update details from settings', (tester) async {
+    _setViewport(tester, const Size(375, 812));
+    final service = getIt<AppUpdateService>() as _FakeAppUpdateService;
+    service.checkResult = _availableUpdateResult();
+    await tester.pumpWidget(const SerialDebugApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('设置'));
+    await tester.pumpAndSettle();
+    final updateTile = find.byKey(
+      const ValueKey<String>('settings-update-check'),
+    );
+    await tester.ensureVisible(updateTile);
+    await tester.tap(updateTile);
+    await tester.pumpAndSettle();
+
+    expect(find.text('发现新版本'), findsOneWidget);
+    expect(find.text('v1.1.0'), findsWidgets);
+    expect(find.text('修复连接问题'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('update-install')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const ValueKey<String>('update-later')));
+    await tester.pumpAndSettle();
+    expect(find.text('发现新版本'), findsNothing);
+    await tester.tap(find.byTooltip('返回'));
+    await tester.pumpAndSettle();
+    expect(find.text(_appDisplayName), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('shows update download progress and closes for installation', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(375, 812));
+    final service = getIt<AppUpdateService>() as _FakeAppUpdateService;
+    service.checkResult = _availableUpdateResult();
+    await tester.pumpWidget(const SerialDebugApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('设置'));
+    await tester.pumpAndSettle();
+    final updateTile = find.byKey(
+      const ValueKey<String>('settings-update-check'),
+    );
+    await tester.ensureVisible(updateTile);
+    await tester.tap(updateTile);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey<String>('update-install')));
+    await tester.pump();
+
+    expect(find.text('正在下载 0%'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('update-cancel-download')),
+      findsOneWidget,
+    );
+
+    service.installEvents.add(const ApkInstallEvent.downloading(0.5));
+    await tester.pump();
+    expect(find.text('正在下载 50%'), findsOneWidget);
+
+    service.installEvents.add(const ApkInstallEvent.installing());
+    await tester.pumpAndSettle();
+    expect(find.text('发现新版本'), findsNothing);
+    await tester.tap(find.byTooltip('返回'));
+    await tester.pumpAndSettle();
+    expect(find.text(_appDisplayName), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('follows system brightness in system theme mode', (tester) async {
@@ -840,5 +928,75 @@ final class _FakeNetworkDiagnostics implements NetworkDiagnostics {
       status: PingStatus.success,
       duration: const Duration(milliseconds: 10),
     );
+  }
+}
+
+UpdateCheckResult _availableUpdateResult() {
+  const installed = InstalledAppInfo(
+    version: '1.0.0',
+    buildNumber: '1',
+    packageName: 'com.zhao.serial.dbg',
+  );
+  return UpdateCheckResult(
+    installed: installed,
+    update: AvailableUpdate(
+      version: Version.parse('1.1.0'),
+      tagName: 'v1.1.0',
+      releaseNotes: '修复连接问题',
+      asset: UpdateAsset(
+        abi: 'arm64-v8a',
+        fileName: 'serialdbg-v1.1.0-arm64-v8a.apk',
+        downloadUri: Uri.parse(
+          'https://github.com/zhao004/flutter_serial_dbg/releases/download/v1.1.0/serialdbg-v1.1.0-arm64-v8a.apk',
+        ),
+        sizeBytes: 8 * 1024 * 1024,
+        sha256: 'a' * 64,
+      ),
+    ),
+  );
+}
+
+final class _FakeAppUpdateService implements AppUpdateService {
+  UpdateCheckResult? checkResult;
+  final StreamController<ApkInstallEvent> installEvents =
+      StreamController<ApkInstallEvent>();
+
+  @override
+  Future<InstalledAppInfo> installedInfo() async {
+    return const InstalledAppInfo(
+      version: '1.0.0',
+      buildNumber: '1',
+      packageName: 'com.zhao.serial.dbg',
+    );
+  }
+
+  @override
+  Future<UpdateCheckResult> checkForUpdate() async {
+    return checkResult ??
+        const UpdateCheckResult(
+          installed: InstalledAppInfo(
+            version: '1.0.0',
+            buildNumber: '1',
+            packageName: 'com.zhao.serial.dbg',
+          ),
+        );
+  }
+
+  @override
+  Stream<ApkInstallEvent> install(AvailableUpdate update) {
+    return installEvents.stream;
+  }
+
+  @override
+  Future<void> cancelDownload() async {}
+
+  @override
+  Future<bool> canRequestPackageInstalls() async => true;
+
+  @override
+  Future<bool> openInstallPermissionSettings() async => true;
+
+  void dispose() {
+    unawaited(installEvents.close());
   }
 }

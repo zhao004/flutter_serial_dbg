@@ -7,10 +7,14 @@ import 'package:signals/signals_flutter.dart';
 
 import '../../di/injector.dart';
 import '../../models/appearance_preferences.dart';
+import '../../models/app_update.dart';
 import '../../routes/app_routes.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_toast.dart';
 import 'appearance_controller.dart';
+import '../update/update_controller.dart';
+import '../update/update_dialog.dart';
+import '../update/update_notice_listener.dart';
 
 /// 应用设置页。
 ///
@@ -21,9 +25,11 @@ class SettingsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controller = getIt<AppearanceController>();
+    final updateController = getIt<UpdateController>();
     return SignalBuilder(
       builder: (context) {
         final colors = context.appColors;
+        final updateState = updateController.state.value;
         return AnnotatedRegion<SystemUiOverlayStyle>(
           value: AppTheme.systemOverlayStyle(context),
           child: Scaffold(
@@ -63,6 +69,7 @@ class SettingsPage extends StatelessWidget {
                       readError: () => controller.lastError.value,
                       onShown: controller.dismissError,
                     ),
+                    UpdateNoticeListener(controller: updateController),
                     Text(
                       '偏好',
                       style: Theme.of(context).textTheme.titleMedium
@@ -85,6 +92,25 @@ class SettingsPage extends StatelessWidget {
                       value: controller.themePreset.value.label,
                       onTap: () =>
                           unawaited(context.push<void>(Routes.themeColor)),
+                    ),
+                    const SizedBox(height: 24),
+                    Text(
+                      '应用',
+                      style: Theme.of(context).textTheme.titleMedium
+                          ?.copyWith(fontSize: 18, fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 14),
+                    _SettingsActionTile(
+                      key: const ValueKey<String>('settings-update-check'),
+                      icon: Icons.system_update_alt_rounded,
+                      title: '版本更新',
+                      value: _updateValue(updateState),
+                      loading: updateState.status == UpdateStatus.checking,
+                      onTap: updateState.status == UpdateStatus.checking
+                          ? null
+                          : () => unawaited(
+                              _checkForUpdate(context, updateController),
+                            ),
                     ),
                   ],
                 ),
@@ -117,6 +143,31 @@ class SettingsPage extends StatelessWidget {
     }
   }
 
+  Future<void> _checkForUpdate(
+    BuildContext context,
+    UpdateController controller,
+  ) async {
+    final result = await controller.checkForUpdates(
+      trigger: UpdateCheckTrigger.manual,
+    );
+    if (!context.mounted || result?.hasUpdate != true) {
+      return;
+    }
+    await showUpdateDialog(context: context, controller: controller);
+  }
+
+  String _updateValue(UpdateState state) {
+    return switch (state.status) {
+      UpdateStatus.checking => '正在检查...',
+      UpdateStatus.available => '可更新至 ${state.update?.tagName ?? '新版本'}',
+      UpdateStatus.downloading => '正在下载安装包',
+      UpdateStatus.awaitingInstall => '等待系统安装',
+      UpdateStatus.failed => '检查失败，点击重试',
+      _ when state.installed != null => '当前 ${state.installed!.displayVersion}',
+      _ => '当前版本未知',
+    };
+  }
+
   IconData _themeModeIcon(AppThemeMode mode) {
     return switch (mode) {
       AppThemeMode.system => Icons.brightness_auto_outlined,
@@ -132,19 +183,22 @@ class _SettingsActionTile extends StatelessWidget {
     required this.icon,
     required this.title,
     required this.value,
-    required this.onTap,
+    this.onTap,
+    this.loading = false,
   });
 
   final IconData icon;
   final String title;
   final String value;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
+  final bool loading;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.appColors;
     return Semantics(
       button: true,
+      enabled: onTap != null,
       label: '$title，$value',
       child: Material(
         color: colors.surfaceMuted,
@@ -184,11 +238,20 @@ class _SettingsActionTile extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 10),
-                Icon(
-                  Icons.chevron_right_rounded,
-                  size: 28,
-                  color: colors.inkMuted,
-                ),
+                if (loading)
+                  SizedBox.square(
+                    dimension: 22,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.4,
+                      color: colors.primaryDeep,
+                    ),
+                  )
+                else
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    size: 28,
+                    color: colors.inkMuted,
+                  ),
               ],
             ),
           ),

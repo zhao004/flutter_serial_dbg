@@ -5,6 +5,7 @@ import 'package:toastification/toastification.dart';
 import 'app/di/injector.dart';
 import 'app/pages/home/home_controller.dart';
 import 'app/pages/settings/appearance_controller.dart';
+import 'app/pages/update/update_controller.dart';
 import 'app/routes/app_router.dart';
 import 'app/theme/app_theme.dart';
 
@@ -14,6 +15,7 @@ Future<void> main() async {
   await Future.wait<void>(<Future<void>>[
     getIt<AppearanceController>().initialize(),
     getIt<HomeController>().initialize(),
+    getIt<UpdateController>().initialize(),
   ]);
   runApp(const SerialDebugApp());
 }

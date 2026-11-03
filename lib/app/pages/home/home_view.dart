@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
@@ -11,6 +12,8 @@ import '../../routes/app_routes.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_toast.dart';
 import '../../widgets/connection_mode_selector.dart';
+import '../update/update_controller.dart';
+import '../update/update_dialog.dart';
 import 'home_controller.dart';
 import 'widgets/ble_connection_panel.dart';
 import 'widgets/connection_panel.dart';
@@ -28,12 +31,28 @@ class HomeView extends StatefulWidget {
 
 class _HomeViewState extends State<HomeView> {
   late final HomeController _controller;
+  late final UpdateController _updateController;
 
   @override
   void initState() {
     super.initState();
     _controller = getIt<HomeController>();
+    _updateController = getIt<UpdateController>();
     unawaited(_controller.initialize());
+    unawaited(_updateController.initialize());
+    if (!kDebugMode) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        unawaited(_checkForStartupUpdate());
+      });
+    }
+  }
+
+  Future<void> _checkForStartupUpdate() async {
+    final result = await _updateController.checkAtStartup();
+    if (!mounted || result?.hasUpdate != true) {
+      return;
+    }
+    await showUpdateDialog(context: context, controller: _updateController);
   }
 
   Future<void> _selectMode(ConnectionMode mode) {

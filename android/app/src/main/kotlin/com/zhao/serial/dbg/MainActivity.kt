@@ -7,6 +7,9 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         PingMethodChannel.register(flutterEngine.dartExecutor.binaryMessenger)
-        AndroidPlatformMethodChannel.register(flutterEngine.dartExecutor.binaryMessenger)
+        AndroidPlatformMethodChannel.register(
+            this,
+            flutterEngine.dartExecutor.binaryMessenger,
+        )
     }
 }

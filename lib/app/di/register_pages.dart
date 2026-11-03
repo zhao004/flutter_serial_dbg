@@ -1,11 +1,13 @@
 import '../database/app_repository.dart';
 import '../pages/home/home_controller.dart';
 import '../pages/settings/appearance_controller.dart';
+import '../pages/update/update_controller.dart';
 import '../services/ble/ble_permission_service.dart';
 import '../services/ble/ble_scanner.dart';
 import '../services/diagnostics/network_diagnostics.dart';
 import '../services/logging/log_exporter.dart';
 import '../services/transport/transport_factory.dart';
+import '../services/update/app_update_service.dart';
 import '../services/usb/usb_serial_service.dart';
 import 'injector.dart';
 
@@ -28,6 +30,12 @@ void registerPages() {
         blePermissionService: getIt<BlePermissionService>(),
         usbSerialService: getIt<UsbSerialService>(),
       ),
+      dispose: (controller) => controller.dispose(),
+    );
+  }
+  if (!getIt.isRegistered<UpdateController>()) {
+    getIt.registerLazySingleton<UpdateController>(
+      () => UpdateController(getIt<AppUpdateService>()),
       dispose: (controller) => controller.dispose(),
     );
   }
