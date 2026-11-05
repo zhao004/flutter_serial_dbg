@@ -25,6 +25,8 @@ SerialDbg 是 Android 优先的原生 Flutter 串口与网络调试客户端。�
   GATT 自动发现、通知订阅、主动读取和特征写入。
 - **BLE 特征选择**：优先选择同时支持写入和通知的服务；排除 Generic Access
   `0x1800` 和 Generic Attribute `0x1801`；未配置 Notify UUID 时允许只写连接。
+- **BLE GATT 工作台**：连接后浏览服务、特征和属性，手动读取、写入、订阅通知或
+  指示；连接前可配置 Service、Write 和 Notify UUID，留空时继续自动选择。
 - **TCP 客户端**：连接指定主机和端口，启用 `tcpNoDelay`，持续接收字节流。
 - **TCP 服务端**：绑定监听地址并接受首个客户端；客户端断开后停止监听，需要重新
   开始监听才能接受下一个客户端。
@@ -40,10 +42,11 @@ SerialDbg 是 Android 优先的原生 Flutter 串口与网络调试客户端。�
 - 单次负载编码和帧缓冲上限均为 `65536` 字节，UDP 单数据报发送上限为
   `65507` 字节。
 - 增量帧解析支持分包、粘包、噪声恢复、非法长度、校验失败和缓冲溢出处理。
-- 临时 `AA55` profile 为 `AA 55 | CMD | LEN | PAYLOAD | XOR`，`LEN` 最大
-  `255`，XOR 覆盖 `CMD`、`LEN` 和 `PAYLOAD`。
-- `AA55` 尚未接入 `HomeController`，当前首页不会自动封装或解析该协议帧，不能
-  声明与原 APK 协议兼容。
+- 协议工作台支持 Raw 和实验性 `AA55` Profile，也可创建自定义单字节长度、XOR
+  校验 Profile；接收数据保留原始日志并展示命令、负载和校验结果。
+- 发送区可选择协议 Profile、输入单字节命令和文本/HEX 负载，预览完整帧后发送。
+  临时 `AA55` Profile 为 `AA 55 | CMD | LEN | PAYLOAD | XOR`，`LEN` 最大
+  `255`；尚不能声明与原 APK 协议兼容。
 
 ### 日志与诊断
 
@@ -53,6 +56,8 @@ SerialDbg 是 Android 优先的原生 Flutter 串口与网络调试客户端。�
   `8192` 个字符。
 - 成功连接后创建日志会话，日志按批次写入 Drift，并在连接结束后裁剪到最近 20 个
   会话。
+- 日志历史页支持按连接模式筛选、搜索会话、文本/HEX 查看、导出、单条删除和清空
+  全部；设置页可关闭会话持久化，并选择保留最近 `10/20/50` 个会话。
 - 当前内存日志可通过 Android Storage Access Framework 导出为 UTF-8 文本，支持
   文本或 HEX 展示格式，不申请全盘存储权限。
 - 网络诊断可读取本机非回环 IPv4 地址，并通过 Android 原生
@@ -72,8 +77,8 @@ SerialDbg 是 Android 优先的原生 Flutter 串口与网络调试客户端。�
 
 ### 持久化与平台能力
 
-- Drift schema 版本为 `3`，保存每种模式最近一次连接配置、应用设置、外观设置和
-  通信会话。
+- Drift schema 版本为 `5`，保存每种模式最近一次连接配置、应用设置、外观设置、
+  通信会话和自定义协议 Profile。
 - Android Manifest 声明网络、按 API 版本区分的 BLE 权限、可选 USB Host 能力和应用
   自更新安装权限。
 - 不申请全盘存储权限；BLE 和 USB Host 不是强制硬件特性。
@@ -83,8 +88,8 @@ SerialDbg 是 Android 优先的原生 Flutter 串口与网络调试客户端。�
 
 - 尚无真实 USB 串口和 BLE 透传设备验收结果。
 - 网络功能已有本机回环测试，但尚无 ESP32 和真实 Android 设备矩阵验收。
-- 当前界面没有历史日志会话浏览、删除入口，也没有 BLE UUID 手工配置入口。
-- 清空日志只清理当前内存日志，不删除已经写入数据库的历史会话。
+- BLE GATT 读取、写入和通知尚未完成真实设备矩阵验收；协议 Profile 当前仅覆盖
+  单字节长度和 XOR 校验格式。
 
 ## 项目结构
 
@@ -104,7 +109,7 @@ lib/
       diagnostics/          本机 IPv4 和 Ping 诊断
       update/               GitHub Release、ABI 选择和 APK 安装适配
     database/               Drift 数据库、表、仓库和生成代码
-    pages/                  首页、设置页及页面控制器
+    pages/                  首页、日志历史、协议和设置页及页面控制器
       update/               更新状态、提示和版本弹窗
     widgets/                跨页面 Widget 和视觉组件
     theme/                  FlexColorScheme 主题和扩展色
@@ -120,6 +125,9 @@ android/                    Android Host 工程、Manifest 和 MethodChannel
 
 - `lib/main.dart`：初始化依赖、加载外观和通信偏好、启动应用。
 - `lib/app/pages/home/home_controller.dart`：通信工作台状态和连接生命周期。
+- `lib/app/pages/home/protocol_controller.dart`：协议 Profile、实时解析和帧编码。
+- `lib/app/pages/home/ble_gatt_controller.dart`：当前 BLE 连接的 GATT 特征操作。
+- `lib/app/pages/history/log_history_controller.dart`：历史会话查询、导出与删除。
 - `lib/app/services/transport/transport.dart`：所有传输通道的统一契约。
 - `lib/app/services/update/app_update_service.dart`：稳定版检查、ABI 资产选择和
   SHA-256 校验边界。

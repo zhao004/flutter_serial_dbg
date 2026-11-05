@@ -5,6 +5,8 @@ import '../models/app_preferences.dart';
 import '../models/connection_config.dart';
 import '../models/connection_mode.dart';
 import '../models/log_entry.dart';
+import '../models/log_session_summary.dart';
+import '../models/protocol_profile.dart';
 import 'database.dart';
 
 /// 连接配置、应用设置和日志的持久化边界。
@@ -39,8 +41,30 @@ abstract interface class AppRepository {
   /// 按时间顺序读取一个会话的日志。
   Future<List<LogEntry>> loadSessionEntries(int sessionId);
 
+  /// 按开始时间倒序读取日志会话摘要。
+  Future<List<LogSessionSummary>> loadLogSessionSummaries({
+    ConnectionMode? mode,
+    int limit = 50,
+    int offset = 0,
+  });
+
+  /// 删除单个日志会话及其全部条目。
+  Future<void> deleteLogSession(int sessionId);
+
+  /// 删除全部日志会话及其全部条目。
+  Future<void> deleteAllLogSessions();
+
   /// 仅保留最近指定数量的日志会话。
   Future<void> trimLogSessions({int keep = 20});
+
+  /// 读取用户保存的协议 Profile。
+  Future<List<ProtocolProfile>> loadProtocolProfiles();
+
+  /// 新增或更新协议 Profile。
+  Future<ProtocolProfile> saveProtocolProfile(ProtocolProfile profile);
+
+  /// 删除指定协议 Profile。
+  Future<void> deleteProtocolProfile(int profileId);
 
   /// 关闭底层数据库。
   Future<void> close();
@@ -103,6 +127,8 @@ final class DriftAppRepository implements AppRepository {
       receiveFormat: row.receiveFormat,
       appendCrlf: row.appendCrlf,
       autoScroll: row.autoScroll,
+      persistSessionLogs: row.persistSessionLogs,
+      logRetentionSessions: row.logRetentionSessions,
     );
   }
 
@@ -120,6 +146,8 @@ final class DriftAppRepository implements AppRepository {
               receiveFormat: Value(preferences.receiveFormat),
               appendCrlf: Value(preferences.appendCrlf),
               autoScroll: Value(preferences.autoScroll),
+              persistSessionLogs: Value(preferences.persistSessionLogs),
+              logRetentionSessions: Value(preferences.logRetentionSessions),
             ),
           );
     });
@@ -227,6 +255,74 @@ final class DriftAppRepository implements AppRepository {
   }
 
   @override
+  Future<List<LogSessionSummary>> loadLogSessionSummaries({
+    ConnectionMode? mode,
+    int limit = 50,
+    int offset = 0,
+  }) async {
+    if (limit <= 0) {
+      throw ArgumentError.value(limit, 'limit', '必须大于 0');
+    }
+    if (offset < 0) {
+      throw ArgumentError.value(offset, 'offset', '不能小于 0');
+    }
+
+    final query = _database.select(_database.logSessions)
+      ..orderBy([
+        (table) => OrderingTerm.desc(table.startedAt),
+        (table) => OrderingTerm.desc(table.id),
+      ])
+      ..limit(limit, offset: offset);
+    if (mode != null) {
+      query.where((table) => table.mode.equals(mode.name));
+    }
+
+    final rows = await query.get();
+    final summaries = <LogSessionSummary>[];
+    for (final row in rows) {
+      final entryCountExpression = _database.logEntries.id.count();
+      final byteCountExpression = CustomExpression<int>(
+        'COALESCE(SUM(LENGTH(payload)), 0)',
+      );
+      final aggregate = _database.selectOnly(_database.logEntries)
+        ..addColumns([entryCountExpression, byteCountExpression])
+        ..where(_database.logEntries.sessionId.equals(row.id));
+      final aggregateRow = await aggregate.getSingle();
+      summaries.add(
+        LogSessionSummary(
+          id: row.id,
+          mode: row.mode,
+          startedAt: row.startedAt,
+          endedAt: row.endedAt,
+          entryCount: aggregateRow.read(entryCountExpression) ?? 0,
+          byteCount: aggregateRow.read(byteCountExpression) ?? 0,
+        ),
+      );
+    }
+    return summaries;
+  }
+
+  @override
+  Future<void> deleteLogSession(int sessionId) async {
+    await _database.transaction(() async {
+      await (_database.delete(
+        _database.logEntries,
+      )..where((table) => table.sessionId.equals(sessionId))).go();
+      await (_database.delete(
+        _database.logSessions,
+      )..where((table) => table.id.equals(sessionId))).go();
+    });
+  }
+
+  @override
+  Future<void> deleteAllLogSessions() async {
+    await _database.transaction(() async {
+      await _database.delete(_database.logEntries).go();
+      await _database.delete(_database.logSessions).go();
+    });
+  }
+
+  @override
   Future<void> trimLogSessions({int keep = 20}) async {
     if (keep <= 0) {
       throw ArgumentError.value(keep, 'keep', '必须大于 0');
@@ -246,6 +342,77 @@ final class DriftAppRepository implements AppRepository {
         _database.logSessions,
       )..where((table) => table.id.isIn(expiredIds))).go();
     });
+  }
+
+  @override
+  Future<List<ProtocolProfile>> loadProtocolProfiles() async {
+    final rows =
+        await (_database.select(_database.protocolProfiles)..orderBy([
+              (table) => OrderingTerm.asc(table.name),
+              (table) => OrderingTerm.asc(table.id),
+            ]))
+            .get();
+    return rows
+        .map(
+          (row) => ProtocolProfile(
+            id: row.id,
+            name: row.name,
+            header: row.header,
+            commandOffset: row.commandOffset,
+            lengthOffset: row.lengthOffset,
+            payloadOffset: row.payloadOffset,
+            checksumStartOffset: row.checksumStartOffset,
+            maxPayloadBytes: row.maxPayloadBytes,
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  @override
+  Future<ProtocolProfile> saveProtocolProfile(ProtocolProfile profile) async {
+    final now = _clock();
+    final existingId = profile.id;
+    if (existingId == null) {
+      final id = await _database
+          .into(_database.protocolProfiles)
+          .insert(
+            ProtocolProfilesCompanion.insert(
+              name: profile.name,
+              header: Uint8List.fromList(profile.header),
+              commandOffset: profile.commandOffset,
+              lengthOffset: profile.lengthOffset,
+              payloadOffset: profile.payloadOffset,
+              checksumStartOffset: profile.checksumStartOffset,
+              maxPayloadBytes: Value(profile.maxPayloadBytes),
+              createdAt: now,
+              updatedAt: now,
+            ),
+          );
+      return profile.withId(id);
+    }
+
+    await (_database.update(
+      _database.protocolProfiles,
+    )..where((table) => table.id.equals(existingId))).write(
+      ProtocolProfilesCompanion(
+        name: Value(profile.name),
+        header: Value(Uint8List.fromList(profile.header)),
+        commandOffset: Value(profile.commandOffset),
+        lengthOffset: Value(profile.lengthOffset),
+        payloadOffset: Value(profile.payloadOffset),
+        checksumStartOffset: Value(profile.checksumStartOffset),
+        maxPayloadBytes: Value(profile.maxPayloadBytes),
+        updatedAt: Value(now),
+      ),
+    );
+    return profile;
+  }
+
+  @override
+  Future<void> deleteProtocolProfile(int profileId) async {
+    await (_database.delete(
+      _database.protocolProfiles,
+    )..where((table) => table.id.equals(profileId))).go();
   }
 
   @override

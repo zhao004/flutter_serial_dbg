@@ -9,11 +9,16 @@ import 'package:flutter_serial_dbg/app/models/connection_config.dart';
 import 'package:flutter_serial_dbg/app/models/connection_mode.dart';
 import 'package:flutter_serial_dbg/app/models/connection_state.dart';
 import 'package:flutter_serial_dbg/app/models/log_entry.dart';
+import 'package:flutter_serial_dbg/app/models/log_session_summary.dart';
 import 'package:flutter_serial_dbg/app/models/ping_result.dart';
+import 'package:flutter_serial_dbg/app/models/protocol_profile.dart';
 import 'package:flutter_serial_dbg/app/models/text_encoding.dart';
 import 'package:flutter_serial_dbg/app/models/transport_event.dart';
 import 'package:flutter_serial_dbg/app/models/usb_serial_device_info.dart';
 import 'package:flutter_serial_dbg/app/pages/home/home_controller.dart';
+import 'package:flutter_serial_dbg/app/pages/home/ble_gatt_controller.dart';
+import 'package:flutter_serial_dbg/app/pages/home/protocol_controller.dart';
+import 'package:flutter_serial_dbg/app/pages/settings/communication_settings_controller.dart';
 import 'package:flutter_serial_dbg/app/services/ble/ble_permission_service.dart';
 import 'package:flutter_serial_dbg/app/services/ble/ble_scanner.dart';
 import 'package:flutter_serial_dbg/app/services/diagnostics/network_diagnostics.dart';
@@ -31,6 +36,9 @@ void main() {
   late FakeBleScanner bleScanner;
   late FakeBlePermissionService blePermissionService;
   late FakeUsbSerialService usbSerialService;
+  late CommunicationSettingsController settingsController;
+  late BleGattController bleGattController;
+  late ProtocolController protocolController;
   late HomeController controller;
 
   setUp(() {
@@ -41,6 +49,9 @@ void main() {
     bleScanner = FakeBleScanner();
     blePermissionService = FakeBlePermissionService();
     usbSerialService = FakeUsbSerialService();
+    settingsController = CommunicationSettingsController(repository);
+    bleGattController = BleGattController();
+    protocolController = ProtocolController(repository);
     addTearDown(bleScanner.dispose);
     addTearDown(usbSerialService.dispose);
     controller = HomeController(
@@ -51,12 +62,18 @@ void main() {
       bleScanner: bleScanner,
       blePermissionService: blePermissionService,
       usbSerialService: usbSerialService,
+      settingsController: settingsController,
+      bleGattController: bleGattController,
+      protocolController: protocolController,
       clock: () => DateTime.utc(2026),
     );
   });
 
   tearDown(() {
     controller.dispose();
+    settingsController.dispose();
+    bleGattController.dispose();
+    protocolController.dispose();
   });
 
   test('connects, sends encoded text and records sent logs', () async {
@@ -161,6 +178,9 @@ void main() {
       bleScanner: bleScanner,
       blePermissionService: blePermissionService,
       usbSerialService: usbSerialService,
+      settingsController: settingsController,
+      bleGattController: bleGattController,
+      protocolController: protocolController,
       clock: () => DateTime.utc(2026),
     );
     addTearDown(restored.dispose);
@@ -178,6 +198,48 @@ void main() {
     await controller.disconnect();
 
     expect(repository.sessions.values.single.single.bytes, <int>[0xAA, 0x55]);
+  });
+
+  test(
+    'skips database session creation when persistence is disabled',
+    () async {
+      await settingsController.setPersistSessionLogs(false);
+      await controller.connect(TcpClientConfig(host: '192.0.2.1', port: 8080));
+      transport.emitData(<int>[0x01]);
+
+      await controller.disconnect();
+
+      expect(repository.sessions, isEmpty);
+      expect(controller.logs.value, isNotEmpty);
+    },
+  );
+
+  test('uses the configured retention count when a session ends', () async {
+    await settingsController.setLogRetentionSessions(10);
+    await controller.connect(TcpClientConfig(host: '192.0.2.1', port: 8080));
+
+    await controller.disconnect();
+
+    expect(repository.lastTrimKeep, 10);
+  });
+
+  test('feeds received bytes into the selected protocol profile', () async {
+    protocolController.selectProfile(
+      ProtocolProfile(name: '测试协议', header: const <int>[0xAA, 0x55]),
+    );
+    final frame = protocolController.encode(
+      command: 0x42,
+      payload: Uint8List.fromList(<int>[0x10, 0x20]),
+    )!;
+    await controller.connect(TcpClientConfig(host: '192.0.2.1', port: 8080));
+
+    transport.emitData(frame);
+
+    expect(protocolController.observations.value, hasLength(1));
+
+    await controller.disconnect();
+
+    expect(protocolController.observations.value, hasLength(1));
   });
 
   test('exports current memory logs with the selected format', () async {
@@ -346,6 +408,8 @@ final class FakeAppRepository implements AppRepository {
   final Map<ConnectionMode, ConnectionConfig> configs =
       <ConnectionMode, ConnectionConfig>{};
   final Map<int, List<LogEntry>> sessions = <int, List<LogEntry>>{};
+  final List<ProtocolProfile> protocolProfiles = <ProtocolProfile>[];
+  int? lastTrimKeep;
   int _nextSessionId = 1;
 
   @override
@@ -381,6 +445,46 @@ final class FakeAppRepository implements AppRepository {
   }
 
   @override
+  Future<List<LogSessionSummary>> loadLogSessionSummaries({
+    ConnectionMode? mode,
+    int limit = 50,
+    int offset = 0,
+  }) async {
+    return const <LogSessionSummary>[];
+  }
+
+  @override
+  Future<void> deleteLogSession(int sessionId) async {
+    sessions.remove(sessionId);
+  }
+
+  @override
+  Future<void> deleteAllLogSessions() async {
+    sessions.clear();
+  }
+
+  @override
+  Future<List<ProtocolProfile>> loadProtocolProfiles() async {
+    return List<ProtocolProfile>.of(protocolProfiles);
+  }
+
+  @override
+  Future<ProtocolProfile> saveProtocolProfile(ProtocolProfile profile) async {
+    final saved = profile.id == null
+        ? profile.withId(protocolProfiles.length + 1)
+        : profile;
+    protocolProfiles
+      ..removeWhere((existing) => existing.id == saved.id)
+      ..add(saved);
+    return saved;
+  }
+
+  @override
+  Future<void> deleteProtocolProfile(int profileId) async {
+    protocolProfiles.removeWhere((profile) => profile.id == profileId);
+  }
+
+  @override
   Future<void> saveConnectionConfig(ConnectionConfig config) async {
     configs[config.mode] = config;
   }
@@ -403,7 +507,9 @@ final class FakeAppRepository implements AppRepository {
   }
 
   @override
-  Future<void> trimLogSessions({int keep = 20}) async {}
+  Future<void> trimLogSessions({int keep = 20}) async {
+    lastTrimKeep = keep;
+  }
 }
 
 final class FakeLogExporter implements LogExporter {

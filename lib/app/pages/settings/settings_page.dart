@@ -8,10 +8,13 @@ import 'package:signals/signals_flutter.dart';
 import '../../di/injector.dart';
 import '../../models/appearance_preferences.dart';
 import '../../models/app_update.dart';
+import '../../models/app_preferences.dart';
 import '../../routes/app_routes.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_toast.dart';
 import 'appearance_controller.dart';
+import 'communication_settings_controller.dart';
+import '../history/log_history_controller.dart';
 import '../update/update_controller.dart';
 import '../update/update_dialog.dart';
 import '../update/update_notice_listener.dart';
@@ -25,6 +28,8 @@ class SettingsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controller = getIt<AppearanceController>();
+    final communication = getIt<CommunicationSettingsController>();
+    final history = getIt<LogHistoryController>();
     final updateController = getIt<UpdateController>();
     return SignalBuilder(
       builder: (context) {
@@ -69,6 +74,10 @@ class SettingsPage extends StatelessWidget {
                       readError: () => controller.lastError.value,
                       onShown: controller.dismissError,
                     ),
+                    ErrorToastListener(
+                      readError: () => communication.lastError.value,
+                      onShown: communication.dismissError,
+                    ),
                     UpdateNoticeListener(controller: updateController),
                     Text(
                       '偏好',
@@ -92,6 +101,52 @@ class SettingsPage extends StatelessWidget {
                       value: controller.themePreset.value.label,
                       onTap: () =>
                           unawaited(context.push<void>(Routes.themeColor)),
+                    ),
+                    const SizedBox(height: 24),
+                    Text(
+                      '日志与历史',
+                      style: Theme.of(context).textTheme.titleMedium
+                          ?.copyWith(fontSize: 18, fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 14),
+                    _SettingsSwitchTile(
+                      key: const ValueKey<String>(
+                        'settings-persist-session-logs',
+                      ),
+                      icon: Icons.save_outlined,
+                      title: '保存通信会话',
+                      subtitle: '关闭后仍会显示当前日志，但不会写入本地历史',
+                      value: communication.persistSessionLogs.value,
+                      onChanged: (value) =>
+                          unawaited(communication.setPersistSessionLogs(value)),
+                    ),
+                    const SizedBox(height: 12),
+                    _SettingsActionTile(
+                      key: const ValueKey<String>('settings-log-retention'),
+                      icon: Icons.auto_delete_outlined,
+                      title: '历史保留数量',
+                      value:
+                          '最近 ${communication.logRetentionSessions.value} 个会话',
+                      onTap: () => unawaited(
+                        _selectLogRetention(context, communication),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    _SettingsActionTile(
+                      key: const ValueKey<String>('settings-log-history'),
+                      icon: Icons.history_rounded,
+                      title: '日志历史',
+                      value: '查看、搜索或导出历史会话',
+                      onTap: () =>
+                          unawaited(context.push<void>(Routes.sessions)),
+                    ),
+                    const SizedBox(height: 12),
+                    _SettingsActionTile(
+                      key: const ValueKey<String>('settings-clear-log-history'),
+                      icon: Icons.delete_sweep_outlined,
+                      title: '清空日志历史',
+                      value: '删除全部已保存的通信会话',
+                      onTap: () => unawaited(_clearHistory(context, history)),
                     ),
                     const SizedBox(height: 24),
                     Text(
@@ -154,6 +209,78 @@ class SettingsPage extends StatelessWidget {
       return;
     }
     await showUpdateDialog(context: context, controller: controller);
+  }
+
+  Future<void> _selectLogRetention(
+    BuildContext context,
+    CommunicationSettingsController controller,
+  ) async {
+    final selected = await showDialog<int>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: const Text('历史保留数量'),
+        children: <Widget>[
+          for (final count in AppPreferences.supportedLogRetentionSessions)
+            SimpleDialogOption(
+              onPressed: () => Navigator.of(context).pop(count),
+              child: Row(
+                children: <Widget>[
+                  Icon(
+                    controller.logRetentionSessions.value == count
+                        ? Icons.check_circle_rounded
+                        : Icons.circle_outlined,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 10),
+                  Text('最近 $count 个会话'),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+    if (selected == null || !context.mounted) {
+      return;
+    }
+    final saved = await controller.setLogRetentionSessions(selected);
+    if (!saved && context.mounted) {
+      AppToast.error(context, '保存日志保留设置失败');
+    }
+  }
+
+  Future<void> _clearHistory(
+    BuildContext context,
+    LogHistoryController controller,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('清空日志历史'),
+        content: const Text('这会删除全部已保存通信会话，且无法恢复。'),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('清空'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) {
+      return;
+    }
+    final deleted = await controller.deleteAll();
+    if (!context.mounted) {
+      return;
+    }
+    if (deleted) {
+      AppToast.success(context, '日志历史已清空');
+    } else {
+      AppToast.error(context, '清空日志历史失败');
+    }
   }
 
   String _updateValue(UpdateState state) {
@@ -256,6 +383,47 @@ class _SettingsActionTile extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _SettingsSwitchTile extends StatelessWidget {
+  const _SettingsSwitchTile({
+    super.key,
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+    return Material(
+      color: colors.surfaceMuted,
+      borderRadius: BorderRadius.circular(18),
+      clipBehavior: Clip.antiAlias,
+      child: SwitchListTile(
+        value: value,
+        onChanged: onChanged,
+        secondary: Icon(icon, size: 29, color: colors.ink),
+        title: Text(
+          title,
+          style: TextStyle(
+            color: colors.ink,
+            fontSize: 17,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        subtitle: Text(subtitle),
       ),
     );
   }

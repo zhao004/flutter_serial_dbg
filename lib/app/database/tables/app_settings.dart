@@ -18,6 +18,12 @@ class AppSettings extends Table {
 
   BoolColumn get autoScroll => boolean().withDefault(const Constant(true))();
 
+  BoolColumn get persistSessionLogs =>
+      boolean().withDefault(const Constant(true))();
+
+  IntColumn get logRetentionSessions =>
+      integer().withDefault(const Constant(20))();
+
   DateTimeColumn get updatedAt =>
       dateTime().map(const UtcDateTimeConverter())();
 

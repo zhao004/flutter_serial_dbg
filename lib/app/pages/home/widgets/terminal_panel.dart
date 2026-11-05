@@ -1,16 +1,18 @@
 import 'dart:async';
 
+import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:signals/signals_flutter.dart';
 
 import '../../../models/log_entry.dart';
 import '../../../models/text_encoding.dart';
-import '../../../services/protocol/hex_codec.dart';
+import '../../../routes/app_routes.dart';
 import '../../../theme/app_theme.dart';
-import '../../../utils/formatters.dart';
 import '../../../widgets/app_toast.dart';
 import '../../../widgets/app_surface_card.dart';
+import '../../../widgets/log_entry_list.dart';
 import '../home_controller.dart';
+import 'protocol_panel.dart';
 import 'send_panel.dart';
 
 /// 通信日志展示、搜索、格式切换、导出和发送工作区。
@@ -41,7 +43,9 @@ class _TerminalPanelState extends State<TerminalPanel> {
     }
     _lastVisibleCount = visibleCount;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !_scrollController.hasClients) {
+      if (!mounted ||
+          !_scrollController.hasClients ||
+          !_scrollController.position.hasContentDimensions) {
         return;
       }
       _scrollController.animateTo(
@@ -126,6 +130,7 @@ class _TerminalPanelState extends State<TerminalPanel> {
                 count: logs.length,
                 filter: _filter,
                 hasVisibleLogs: hasVisibleLogs,
+                onHistory: () => unawaited(context.push<void>(Routes.sessions)),
                 onFilterChanged: (filter) {
                   setState(() {
                     _filter = filter;
@@ -148,7 +153,7 @@ class _TerminalPanelState extends State<TerminalPanel> {
                     ? const _EmptyLogState()
                     : filtered.isEmpty
                     ? const _FilterEmptyState()
-                    : _LogList(
+                    : AppLogEntryList(
                         entries: filtered,
                         format: format,
                         textEncoding: textEncoding,
@@ -169,7 +174,8 @@ class _TerminalPanelState extends State<TerminalPanel> {
                 onExport: () => unawaited(_exportLogs()),
                 onClear: _clearLogs,
               ),
-              const SizedBox(height: 10),
+              ProtocolPanel(homeController: widget.controller),
+              const SizedBox(height: 8),
               SendPanel(controller: widget.controller),
             ],
           ),
@@ -184,6 +190,7 @@ class _LogHeader extends StatelessWidget {
     required this.count,
     required this.filter,
     required this.hasVisibleLogs,
+    required this.onHistory,
     required this.onFilterChanged,
     required this.onFullScreen,
   });
@@ -191,6 +198,7 @@ class _LogHeader extends StatelessWidget {
   final int count;
   final _LogFilter filter;
   final bool hasVisibleLogs;
+  final VoidCallback onHistory;
   final ValueChanged<_LogFilter> onFilterChanged;
   final VoidCallback onFullScreen;
 
@@ -251,6 +259,11 @@ class _LogHeader extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 4),
+        _LogToolButton(
+          tooltip: '日志历史',
+          icon: Icons.history_rounded,
+          onPressed: onHistory,
+        ),
         _LogFilterMenu(selected: filter, onSelected: onFilterChanged),
         _LogToolButton(
           tooltip: '全屏查看日志',
@@ -649,99 +662,6 @@ class _CrlfControl extends StatelessWidget {
   }
 }
 
-class _LogList extends StatelessWidget {
-  const _LogList({
-    required this.entries,
-    required this.format,
-    required this.textEncoding,
-    this.scrollController,
-  });
-
-  final List<LogEntry> entries;
-  final PayloadFormat format;
-  final TextEncoding textEncoding;
-  final ScrollController? scrollController;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scrollbar(
-      controller: scrollController,
-      child: ListView.builder(
-        controller: scrollController,
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        itemCount: entries.length,
-        itemBuilder: (context, index) {
-          return _LogRow(
-            entry: entries[index],
-            format: format,
-            textEncoding: textEncoding,
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _LogRow extends StatelessWidget {
-  const _LogRow({
-    required this.entry,
-    required this.format,
-    required this.textEncoding,
-  });
-
-  final LogEntry entry;
-  final PayloadFormat format;
-  final TextEncoding textEncoding;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.appColors;
-    final text = _renderEntry(entry, format, textEncoding);
-    final color = switch (entry.direction) {
-      LogDirection.sent => colors.primary,
-      LogDirection.received => colors.receive,
-      LogDirection.system => colors.warning,
-    };
-    final icon = switch (entry.direction) {
-      LogDirection.sent => Icons.arrow_upward_rounded,
-      LogDirection.received => Icons.arrow_downward_rounded,
-      LogDirection.system => Icons.info_outline_rounded,
-    };
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          SizedBox(
-            width: 83,
-            child: Text(
-              formatLogTimestamp(entry.timestamp),
-              style: TextStyle(
-                color: colors.inkMuted,
-                fontSize: 10.5,
-                fontFamily: 'monospace',
-              ),
-            ),
-          ),
-          Icon(icon, size: 15, color: color),
-          const SizedBox(width: 6),
-          Expanded(
-            child: SelectableText(
-              text,
-              style: TextStyle(
-                color: color,
-                fontSize: 11.5,
-                height: 1.35,
-                fontFamily: 'monospace',
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _EmptyLogState extends StatelessWidget {
   const _EmptyLogState();
 
@@ -908,7 +828,7 @@ class _FullScreenLogSheetState extends State<_FullScreenLogSheet> {
     }
     return widget.entries
         .where((entry) {
-          return _renderEntry(
+          return formatLogEntry(
             entry,
             widget.format,
             widget.textEncoding,
@@ -1003,7 +923,7 @@ class _FullScreenLogSheetState extends State<_FullScreenLogSheet> {
             clipBehavior: Clip.antiAlias,
             child: visibleEntries.isEmpty
                 ? const _FullScreenLogEmptyState()
-                : _LogList(
+                : AppLogEntryList(
                     entries: visibleEntries,
                     format: widget.format,
                     textEncoding: widget.textEncoding,
@@ -1032,21 +952,4 @@ class _FullScreenLogEmptyState extends StatelessWidget {
       ),
     );
   }
-}
-
-String _renderEntry(
-  LogEntry entry,
-  PayloadFormat format,
-  TextEncoding textEncoding,
-) {
-  final payloadFormat = entry.direction == LogDirection.system
-      ? PayloadFormat.text
-      : format;
-  return clampRenderedText(
-    PayloadCodec.format(
-      entry.copyBytes(),
-      format: payloadFormat,
-      textEncoding: textEncoding,
-    ),
-  );
 }

@@ -7,23 +7,31 @@ import 'package:flutter_serial_dbg/app/models/appearance_preferences.dart';
 import 'package:flutter_serial_dbg/app/models/app_preferences.dart';
 import 'package:flutter_serial_dbg/app/models/app_update.dart';
 import 'package:flutter_serial_dbg/app/models/ble_device_info.dart';
+import 'package:flutter_serial_dbg/app/models/ble_gatt.dart';
 import 'package:flutter_serial_dbg/app/models/connection_config.dart';
 import 'package:flutter_serial_dbg/app/models/connection_mode.dart';
 import 'package:flutter_serial_dbg/app/models/log_entry.dart';
+import 'package:flutter_serial_dbg/app/models/log_session_summary.dart';
 import 'package:flutter_serial_dbg/app/models/ping_result.dart';
+import 'package:flutter_serial_dbg/app/models/protocol_profile.dart';
 import 'package:flutter_serial_dbg/app/models/text_encoding.dart';
 import 'package:flutter_serial_dbg/app/models/usb_serial_device_info.dart';
 import 'package:flutter_serial_dbg/app/pages/home/home_controller.dart';
+import 'package:flutter_serial_dbg/app/pages/home/ble_gatt_controller.dart';
+import 'package:flutter_serial_dbg/app/pages/home/ble_gatt_page.dart';
+import 'package:flutter_serial_dbg/app/pages/home/protocol_controller.dart';
 import 'package:flutter_serial_dbg/app/pages/settings/appearance_controller.dart';
 import 'package:flutter_serial_dbg/app/pages/update/update_controller.dart';
 import 'package:flutter_serial_dbg/app/services/diagnostics/network_diagnostics.dart';
 import 'package:flutter_serial_dbg/app/services/ble/ble_permission_service.dart';
+import 'package:flutter_serial_dbg/app/services/ble/ble_gatt_session.dart';
 import 'package:flutter_serial_dbg/app/services/ble/ble_scanner.dart';
 import 'package:flutter_serial_dbg/app/services/logging/log_exporter.dart';
 import 'package:flutter_serial_dbg/app/services/update/app_update_service.dart';
 import 'package:flutter_serial_dbg/app/services/usb/usb_serial_service.dart';
 import 'package:flutter_serial_dbg/app/theme/app_theme.dart';
 import 'package:flutter_serial_dbg/app/widgets/app_toast.dart';
+import 'package:flutter_serial_dbg/app/widgets/app_surface_card.dart';
 import 'package:flutter_serial_dbg/main.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
@@ -353,7 +361,12 @@ void main() {
     final updateTile = find.byKey(
       const ValueKey<String>('settings-update-check'),
     );
-    await tester.ensureVisible(updateTile);
+    await tester.scrollUntilVisible(
+      updateTile,
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
     await tester.tap(updateTile);
     await tester.pumpAndSettle();
 
@@ -388,7 +401,12 @@ void main() {
     final updateTile = find.byKey(
       const ValueKey<String>('settings-update-check'),
     );
-    await tester.ensureVisible(updateTile);
+    await tester.scrollUntilVisible(
+      updateTile,
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
     await tester.tap(updateTile);
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey<String>('update-install')));
@@ -746,6 +764,315 @@ void main() {
     expect(find.text('ASCII'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('browses persisted history and opens a session detail', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(375, 812));
+    final repository = getIt<AppRepository>() as _FakeAppRepository;
+    repository.sessionSummaries = <LogSessionSummary>[
+      LogSessionSummary(
+        id: 7,
+        mode: ConnectionMode.tcpClient,
+        startedAt: DateTime.utc(2026, 1, 1, 10),
+        endedAt: DateTime.utc(2026, 1, 1, 10, 1),
+        entryCount: 1,
+        byteCount: 5,
+      ),
+    ];
+    repository.sessionEntries[7] = <LogEntry>[
+      LogEntry(
+        timestamp: DateTime.utc(2026, 1, 1, 10),
+        direction: LogDirection.received,
+        format: PayloadFormat.hex,
+        channel: 'tcpClient',
+        bytes: Uint8List.fromList(<int>[0xAA, 0x55, 0x01, 0x10, 0xB4]),
+      ),
+    ];
+
+    await tester.pumpWidget(const SerialDebugApp());
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('日志历史'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('日志历史'), findsOneWidget);
+    expect(find.text('TCP 客户端'), findsOneWidget);
+    expect(find.textContaining('1 条'), findsOneWidget);
+
+    await tester.tap(find.text('TCP 客户端'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('会话详情'), findsOneWidget);
+    expect(find.byTooltip('协议解析'), findsOneWidget);
+    await tester.tap(find.byTooltip('协议解析'));
+    await tester.pumpAndSettle();
+    expect(find.text('历史协议解析'), findsOneWidget);
+    await tester.tap(find.byTooltip('关闭'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('返回'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('返回'));
+    await tester.pumpAndSettle();
+    expect(find.text(_appDisplayName), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('returns to all history sessions after filtering by mode', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(375, 812));
+    final repository = getIt<AppRepository>() as _FakeAppRepository;
+    repository.sessionSummaries = <LogSessionSummary>[
+      LogSessionSummary(
+        id: 7,
+        mode: ConnectionMode.tcpClient,
+        startedAt: DateTime.utc(2026, 1, 1, 10),
+        endedAt: DateTime.utc(2026, 1, 1, 10, 1),
+        entryCount: 1,
+        byteCount: 5,
+      ),
+      LogSessionSummary(
+        id: 8,
+        mode: ConnectionMode.ble,
+        startedAt: DateTime.utc(2026, 1, 2, 10),
+        endedAt: DateTime.utc(2026, 1, 2, 10, 1),
+        entryCount: 1,
+        byteCount: 5,
+      ),
+    ];
+
+    await tester.pumpWidget(const SerialDebugApp());
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('日志历史'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('筛选连接模式'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('BLE').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('TCP 客户端'), findsNothing);
+    expect(find.text('BLE'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('筛选连接模式'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('全部模式'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('TCP 客户端'), findsOneWidget);
+    expect(find.text('BLE'), findsOneWidget);
+    await tester.tap(find.byTooltip('返回'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('renders an unframed empty history state without refresh', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(375, 812));
+
+    await tester.pumpWidget(const SerialDebugApp());
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('日志历史'));
+    await tester.pumpAndSettle();
+
+    expect(find.byIcon(Icons.history_toggle_off_rounded), findsOneWidget);
+    expect(find.text('成功连接后产生的通信日志会显示在这里。'), findsOneWidget);
+    expect(find.byType(AppSurfaceCard), findsNothing);
+    expect(find.byTooltip('刷新历史'), findsNothing);
+    expect(find.text('刷新'), findsNothing);
+    await tester.tap(find.byTooltip('返回'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('renders the GATT explorer with services and characteristics', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(375, 812));
+    final controller = getIt<BleGattController>();
+    final session = _WidgetGattSession();
+    controller.bind(session);
+    addTearDown(() {
+      controller.unbind(session);
+      session.dispose();
+    });
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(AppThemePreset.indigoM3),
+        home: const BleGattPage(),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('BLE GATT'), findsOneWidget);
+    expect(find.text('0000FFF0-0000-1000-8000-00805F9B34FB'), findsOneWidget);
+    expect(find.textContaining('读取 · 通知'), findsOneWidget);
+
+    await tester.tap(find.textContaining('读取 · 通知'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('特征操作'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('gatt-write-payload')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('toggles persisted session logging from settings', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(375, 812));
+    final repository = getIt<AppRepository>() as _FakeAppRepository;
+    await tester.pumpWidget(const SerialDebugApp());
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('设置'));
+    await tester.pumpAndSettle();
+
+    final switchTile = find.byKey(
+      const ValueKey<String>('settings-persist-session-logs'),
+    );
+    await tester.scrollUntilVisible(
+      switchTile,
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('保存通信会话'));
+    await tester.pumpAndSettle();
+
+    expect(repository.preferences.persistSessionLogs, isFalse);
+    await tester.tap(find.byTooltip('返回'));
+    await tester.pumpAndSettle();
+    expect(find.text(_appDisplayName), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('creates a custom protocol profile from the workspace', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(375, 812));
+    final repository = getIt<AppRepository>() as _FakeAppRepository;
+    await tester.pumpWidget(const SerialDebugApp());
+    await tester.pumpAndSettle();
+
+    final manageButton = find.byTooltip('管理协议 Profile');
+    await tester.scrollUntilVisible(
+      manageButton,
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(manageButton);
+    await tester.pumpAndSettle();
+
+    expect(find.text('协议 Profile'), findsOneWidget);
+    await tester.tap(find.byTooltip('新增协议 Profile'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey<String>('protocol-profile-name')),
+      '产线设备',
+    );
+    await tester.tap(find.text('保存 Profile'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('产线设备'), findsOneWidget);
+    expect(repository.protocolProfiles.single.name, '产线设备');
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('返回'));
+    await tester.pumpAndSettle();
+    expect(find.text(_appDisplayName), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('exposes only saved custom protocol profiles', (tester) async {
+    _setViewport(tester, const Size(375, 812));
+    final repository = getIt<AppRepository>() as _FakeAppRepository;
+    repository.protocolProfiles.add(
+      ProtocolProfile(
+        id: 1,
+        name: '设备协议',
+        header: const <int>[0x7E],
+        commandOffset: 1,
+        lengthOffset: 2,
+        payloadOffset: 3,
+        checksumStartOffset: 1,
+      ),
+    );
+    await getIt<ProtocolController>().initialize();
+    await tester.pumpWidget(const SerialDebugApp());
+    await tester.pumpAndSettle();
+
+    final protocolSelector = find.byTooltip('选择协议 Profile');
+    await tester.scrollUntilVisible(
+      protocolSelector,
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(protocolSelector);
+    await tester.pumpAndSettle();
+
+    expect(find.text('原始字节（Raw）'), findsNothing);
+    expect(find.text('AA55（实验）'), findsNothing);
+    expect(find.text('设备协议'), findsWidgets);
+    await tester.tap(find.text('设备协议').last);
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey<String>('protocol-command')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('protocol-payload')),
+      findsOneWidget,
+    );
+
+    final manageButton = find.byTooltip('管理协议 Profile');
+    await tester.tap(manageButton);
+    await tester.pumpAndSettle();
+    expect(find.text('内置 · 实验'), findsNothing);
+    expect(find.text('AA55（实验）'), findsNothing);
+    await tester.tap(find.byTooltip('返回'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('opens manual GATT UUID configuration for a saved BLE device', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(375, 812));
+    final repository = getIt<AppRepository>() as _FakeAppRepository;
+    repository.configs[ConnectionMode.ble] = BleConfig(
+      remoteId: 'AA:BB:CC:DD:EE:FF',
+    );
+    await tester.pumpWidget(const SerialDebugApp());
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey<String>('mode-wireless')));
+    await _settleModeChange(tester);
+
+    await tester.tap(find.byKey(const ValueKey<String>('ble-gatt-action')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('GATT UUID 配置'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('ble-service-uuid')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('ble-write-uuid')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('ble-notify-uuid')),
+      findsOneWidget,
+    );
+    await tester.tap(find.byTooltip('关闭'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
 }
 
 void _setViewport(WidgetTester tester, Size size) {
@@ -847,6 +1174,12 @@ final class _FakeUsbSerialService implements UsbSerialService {
 
 final class _FakeAppRepository implements AppRepository {
   AppearancePreferences appearance = const AppearancePreferences();
+  AppPreferences preferences = const AppPreferences();
+  List<LogSessionSummary> sessionSummaries = const <LogSessionSummary>[];
+  final Map<int, List<LogEntry>> sessionEntries = <int, List<LogEntry>>{};
+  final List<ProtocolProfile> protocolProfiles = <ProtocolProfile>[];
+  final Map<ConnectionMode, ConnectionConfig> configs =
+      <ConnectionMode, ConnectionConfig>{};
 
   @override
   Future<void> appendLogEntries(
@@ -862,12 +1195,12 @@ final class _FakeAppRepository implements AppRepository {
 
   @override
   Future<ConnectionConfig?> loadConnectionConfig(ConnectionMode mode) async {
-    return null;
+    return configs[mode];
   }
 
   @override
   Future<AppPreferences> loadPreferences() async {
-    return const AppPreferences();
+    return preferences;
   }
 
   @override
@@ -877,14 +1210,68 @@ final class _FakeAppRepository implements AppRepository {
 
   @override
   Future<List<LogEntry>> loadSessionEntries(int sessionId) async {
-    return const <LogEntry>[];
+    return List<LogEntry>.of(sessionEntries[sessionId] ?? const <LogEntry>[]);
   }
 
   @override
-  Future<void> saveConnectionConfig(ConnectionConfig config) async {}
+  Future<List<LogSessionSummary>> loadLogSessionSummaries({
+    ConnectionMode? mode,
+    int limit = 50,
+    int offset = 0,
+  }) async {
+    return List<LogSessionSummary>.of(
+      mode == null
+          ? sessionSummaries
+          : sessionSummaries
+                .where((session) => session.mode == mode)
+                .toList(growable: false),
+    );
+  }
 
   @override
-  Future<void> savePreferences(AppPreferences preferences) async {}
+  Future<void> deleteLogSession(int sessionId) async {
+    sessionSummaries = sessionSummaries
+        .where((session) => session.id != sessionId)
+        .toList(growable: false);
+    sessionEntries.remove(sessionId);
+  }
+
+  @override
+  Future<void> deleteAllLogSessions() async {
+    sessionSummaries = const <LogSessionSummary>[];
+    sessionEntries.clear();
+  }
+
+  @override
+  Future<List<ProtocolProfile>> loadProtocolProfiles() async {
+    return List<ProtocolProfile>.of(protocolProfiles);
+  }
+
+  @override
+  Future<ProtocolProfile> saveProtocolProfile(ProtocolProfile profile) async {
+    final saved = profile.id == null
+        ? profile.withId(protocolProfiles.length + 1)
+        : profile;
+    protocolProfiles
+      ..removeWhere((item) => item.id == saved.id)
+      ..add(saved);
+    return saved;
+  }
+
+  @override
+  Future<void> deleteProtocolProfile(int profileId) async {
+    protocolProfiles.removeWhere((profile) => profile.id == profileId);
+  }
+
+  @override
+  Future<void> saveConnectionConfig(ConnectionConfig config) async {
+    configs[config.mode] = config;
+  }
+
+  @override
+  Future<void> savePreferences(AppPreferences preferences) async {
+    this.preferences = preferences;
+  }
 
   @override
   Future<void> saveAppearancePreferences(
@@ -998,5 +1385,65 @@ final class _FakeAppUpdateService implements AppUpdateService {
 
   void dispose() {
     unawaited(installEvents.close());
+  }
+}
+
+final class _WidgetGattSession implements BleGattSession {
+  final StreamController<BleGattValue> _values =
+      StreamController<BleGattValue>.broadcast(sync: true);
+
+  @override
+  List<BleGattServiceInfo> get gattServices => <BleGattServiceInfo>[
+    BleGattServiceInfo(
+      uuid: '0000FFF0-0000-1000-8000-00805F9B34FB',
+      characteristics: <BleGattCharacteristicInfo>[
+        BleGattCharacteristicInfo(
+          serviceUuid: '0000FFF0-0000-1000-8000-00805F9B34FB',
+          uuid: '0000FFF1-0000-1000-8000-00805F9B34FB',
+          properties: const <BleGattProperty>[
+            BleGattProperty.read,
+            BleGattProperty.notify,
+          ],
+        ),
+      ],
+    ),
+  ];
+
+  @override
+  Stream<BleGattValue> get gattValues => _values.stream;
+
+  @override
+  Set<String> get notifiedGattKeys => const <String>{};
+
+  @override
+  Future<BleGattValue> readGattCharacteristic({
+    required String serviceUuid,
+    required String characteristicUuid,
+  }) async {
+    return BleGattValue(
+      serviceUuid: serviceUuid,
+      characteristicUuid: characteristicUuid,
+      bytes: Uint8List.fromList(<int>[0x01]),
+      receivedAt: DateTime.utc(2026),
+    );
+  }
+
+  @override
+  Future<void> setGattNotify({
+    required String serviceUuid,
+    required String characteristicUuid,
+    required bool enabled,
+  }) async {}
+
+  @override
+  Future<void> writeGattCharacteristic({
+    required String serviceUuid,
+    required String characteristicUuid,
+    required Uint8List data,
+    required bool withResponse,
+  }) async {}
+
+  void dispose() {
+    unawaited(_values.close());
   }
 }

@@ -11,6 +11,7 @@ import 'tables/app_settings.dart';
 import 'tables/connection_profiles.dart';
 import 'tables/log_entries.dart';
 import 'tables/log_sessions.dart';
+import 'tables/protocol_profiles.dart';
 import 'type/utc_date_time_converter.dart';
 
 part 'database.g.dart';
@@ -23,6 +24,7 @@ part 'database.g.dart';
     AppearanceSettings,
     LogSessions,
     LogEntries,
+    ProtocolProfiles,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -32,7 +34,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration {
@@ -47,6 +49,16 @@ class AppDatabase extends _$AppDatabase {
         }
         if (from < 3) {
           await migrator.createTable(appearanceSettings);
+        }
+        if (from < 4) {
+          await migrator.addColumn(appSettings, appSettings.persistSessionLogs);
+          await migrator.addColumn(
+            appSettings,
+            appSettings.logRetentionSessions,
+          );
+        }
+        if (from < 5) {
+          await migrator.createTable(protocolProfiles);
         }
       },
     );

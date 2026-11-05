@@ -124,9 +124,12 @@ final class LogSessionRecorder {
   }
 
   /// 刷新待写日志、结束会话并清理超量历史会话。
-  Future<void> stop(DateTime endedAt) async {
+  Future<void> stop(DateTime endedAt, {int keepSessions = 20}) async {
     if (!_active) {
       return;
+    }
+    if (keepSessions <= 0) {
+      throw ArgumentError.value(keepSessions, 'keepSessions', '必须大于 0');
     }
     _active = false;
     _stopRequestedAt = endedAt;
@@ -140,7 +143,7 @@ final class LogSessionRecorder {
     _stopRequestedAt = null;
     try {
       await _repository.endLogSession(sessionId, endedAt);
-      await _repository.trimLogSessions();
+      await _repository.trimLogSessions(keep: keepSessions);
     } catch (_) {
       _onError?.call('日志会话收尾失败');
     }

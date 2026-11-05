@@ -5,7 +5,6 @@ import 'dart:typed_data';
 import 'package:signals/signals.dart';
 
 import '../../database/app_repository.dart';
-import '../../models/app_preferences.dart';
 import '../../models/ble_device_info.dart';
 import '../../models/connection_config.dart';
 import '../../models/connection_mode.dart';
@@ -16,6 +15,7 @@ import '../../models/text_encoding.dart';
 import '../../models/transport_event.dart';
 import '../../models/usb_serial_device_info.dart';
 import '../../services/diagnostics/network_diagnostics.dart';
+import '../../services/ble/ble_gatt_session.dart';
 import '../../services/ble/ble_permission_service.dart';
 import '../../services/ble/ble_scanner.dart';
 import '../../services/logging/log_buffer.dart';
@@ -25,6 +25,9 @@ import '../../services/protocol/hex_codec.dart';
 import '../../services/transport/transport.dart';
 import '../../services/transport/transport_factory.dart';
 import '../../services/usb/usb_serial_service.dart';
+import '../settings/communication_settings_controller.dart';
+import 'ble_gatt_controller.dart';
+import 'protocol_controller.dart';
 
 /// 首页通信工作台状态编排器。
 ///
@@ -38,6 +41,9 @@ class HomeController {
     required BleScanner bleScanner,
     required BlePermissionService blePermissionService,
     required UsbSerialService usbSerialService,
+    required CommunicationSettingsController settingsController,
+    required BleGattController bleGattController,
+    required ProtocolController protocolController,
     DateTime Function()? clock,
     LogBuffer? logBuffer,
     LogSessionRecorder? logSessionRecorder,
@@ -57,6 +63,9 @@ class HomeController {
       bleScanner,
       blePermissionService,
       usbSerialService,
+      settingsController,
+      bleGattController,
+      protocolController,
       clock ?? DateTime.now,
       logBuffer ?? LogBuffer(),
       recorder,
@@ -72,6 +81,9 @@ class HomeController {
     this._bleScanner,
     this._blePermissionService,
     this._usbSerialService,
+    this._settingsController,
+    this._bleGattController,
+    this._protocolController,
     this._clock,
     this._logBuffer,
     this._logSessionRecorder,
@@ -88,6 +100,9 @@ class HomeController {
   final BleScanner _bleScanner;
   final BlePermissionService _blePermissionService;
   final UsbSerialService _usbSerialService;
+  final CommunicationSettingsController _settingsController;
+  final BleGattController _bleGattController;
+  final ProtocolController _protocolController;
   final DateTime Function() _clock;
   final LogBuffer _logBuffer;
   final LogSessionRecorder _logSessionRecorder;
@@ -102,26 +117,31 @@ class HomeController {
   bool _disposed = false;
   bool _usbRefreshQueued = false;
   Future<void>? _initialization;
-  Future<void> _preferenceWrite = Future<void>.value();
-  AppPreferences _preferences = const AppPreferences();
 
   /// 当前选择的连接模式。
   final Signal<ConnectionMode> selectedMode = signal(ConnectionMode.usbSerial);
 
   /// 发送负载格式。
-  final Signal<PayloadFormat> payloadFormat = signal(PayloadFormat.text);
+  Signal<PayloadFormat> get payloadFormat => _settingsController.sendFormat;
 
   /// 接收日志展示格式。
-  final Signal<PayloadFormat> receiveFormat = signal(PayloadFormat.text);
+  Signal<PayloadFormat> get receiveFormat => _settingsController.receiveFormat;
 
   /// 文本发送和文本日志展示使用的编码。
   final Signal<TextEncoding> textEncoding = signal(TextEncoding.utf8);
 
   /// 发送时是否追加 CRLF。
-  final Signal<bool> appendCrlf = signal(false);
+  Signal<bool> get appendCrlf => _settingsController.appendCrlf;
 
   /// 新日志到达后是否自动滚动到底部。
-  final Signal<bool> autoScroll = signal(true);
+  Signal<bool> get autoScroll => _settingsController.autoScroll;
+
+  /// 是否将连接日志写入本地数据库。
+  Signal<bool> get persistSessionLogs => _settingsController.persistSessionLogs;
+
+  /// 本地保留的日志会话数量。
+  Signal<int> get logRetentionSessions =>
+      _settingsController.logRetentionSessions;
 
   /// 是否正在写入发送缓冲。
   final Signal<bool> isSending = signal(false);
@@ -158,7 +178,7 @@ class HomeController {
 
   /// 加载持久化设置；重复调用复用同一个初始化过程。
   Future<void> initialize() {
-    return _initialization ??= _loadPreferences();
+    return _initialization ??= _initializeSettings();
   }
 
   /// 读取指定模式最近一次成功保存的连接配置。
@@ -168,6 +188,17 @@ class HomeController {
     } catch (_) {
       _setError('读取连接配置失败');
       return null;
+    }
+  }
+
+  /// 显式保存草稿连接配置。
+  Future<bool> saveConnectionConfig(ConnectionConfig config) async {
+    try {
+      await _repository.saveConnectionConfig(config);
+      return true;
+    } catch (_) {
+      _setError('保存连接配置失败');
+      return false;
     }
   }
 
@@ -292,22 +323,12 @@ class HomeController {
 
   /// 更新发送格式并异步保存。
   void setPayloadFormat(PayloadFormat format) {
-    if (payloadFormat.value == format) {
-      return;
-    }
-    payloadFormat.value = format;
-    _preferences = _preferences.copyWith(sendFormat: format);
-    _queuePersistPreferences();
+    unawaited(_settingsController.setSendFormat(format));
   }
 
   /// 更新接收展示格式并异步保存。
   void setReceiveFormat(PayloadFormat format) {
-    if (receiveFormat.value == format) {
-      return;
-    }
-    receiveFormat.value = format;
-    _preferences = _preferences.copyWith(receiveFormat: format);
-    _queuePersistPreferences();
+    unawaited(_settingsController.setReceiveFormat(format));
   }
 
   /// 更新当前会话使用的文本编码。
@@ -317,22 +338,22 @@ class HomeController {
 
   /// 更新 CRLF 选项并异步保存。
   void setAppendCrlf(bool enabled) {
-    if (appendCrlf.value == enabled) {
-      return;
-    }
-    appendCrlf.value = enabled;
-    _preferences = _preferences.copyWith(appendCrlf: enabled);
-    _queuePersistPreferences();
+    unawaited(_settingsController.setAppendCrlf(enabled));
   }
 
   /// 更新自动滚动选项并异步保存。
   void setAutoScroll(bool enabled) {
-    if (autoScroll.value == enabled) {
-      return;
-    }
-    autoScroll.value = enabled;
-    _preferences = _preferences.copyWith(autoScroll: enabled);
-    _queuePersistPreferences();
+    unawaited(_settingsController.setAutoScroll(enabled));
+  }
+
+  /// 更新会话持久化开关。
+  void setPersistSessionLogs(bool enabled) {
+    unawaited(_settingsController.setPersistSessionLogs(enabled));
+  }
+
+  /// 更新日志会话保留数量。
+  void setLogRetentionSessions(int count) {
+    unawaited(_settingsController.setLogRetentionSessions(count));
   }
 
   /// 通过系统文件选择器导出当前内存日志。
@@ -394,6 +415,7 @@ class HomeController {
     _activeConfig = config;
     selectedMode.value = config.mode;
     lastError.value = null;
+    _protocolController.resetSession();
     connectionState.value = ConnectionSnapshot(
       status: TransportStatus.connecting,
       config: config,
@@ -420,6 +442,10 @@ class HomeController {
           changedAt: _clock(),
           message: _configLabel(config),
         );
+      }
+      final bleSession = transport;
+      if (bleSession is BleGattSession) {
+        _bleGattController.bind(bleSession as BleGattSession);
       }
       unawaited(_saveConnectionConfig(transport.config ?? config));
     } catch (error) {
@@ -552,12 +578,14 @@ class HomeController {
         lastError.value = null;
         unawaited(_startLogSession(generation, config.mode));
       case TransportDataReceived():
+        final bytes = event.copyBytes();
         _appendLog(
           direction: LogDirection.received,
-          bytes: event.copyBytes(),
+          bytes: bytes,
           format: receiveFormat.value,
           channel: _activeConfig?.mode.name ?? 'transport',
         );
+        _protocolController.addChunk(bytes);
       case TransportFailure():
         _handleTransportFailure(generation, transport, event.message);
       case TransportDisconnected():
@@ -597,6 +625,10 @@ class HomeController {
     _transportSubscription = null;
     _transport = null;
     _activeConfig = null;
+    _protocolController.resetParser();
+    if (transport is BleGattSession) {
+      _bleGattController.unbind(transport as BleGattSession);
+    }
     await subscription?.cancel();
     await transport?.dispose();
   }
@@ -674,31 +706,12 @@ class HomeController {
     };
   }
 
-  Future<void> _loadPreferences() async {
-    try {
-      final preferences = await _repository.loadPreferences();
-      if (_disposed) {
-        return;
-      }
-      _preferences = preferences;
-      payloadFormat.value = preferences.sendFormat;
-      receiveFormat.value = preferences.receiveFormat;
-      appendCrlf.value = preferences.appendCrlf;
-      autoScroll.value = preferences.autoScroll;
-    } catch (_) {
-      _handleStorageError('读取本地设置失败，已使用默认设置');
+  Future<void> _initializeSettings() async {
+    await _settingsController.initialize();
+    final error = _settingsController.lastError.value;
+    if (!_disposed && error != null) {
+      _handleStorageError(error);
     }
-  }
-
-  void _queuePersistPreferences() {
-    final snapshot = _preferences;
-    _preferenceWrite = _preferenceWrite.then((_) async {
-      try {
-        await _repository.savePreferences(snapshot);
-      } catch (_) {
-        _handleStorageError('保存本地设置失败');
-      }
-    });
   }
 
   Future<void> _saveConnectionConfig(ConnectionConfig config) async {
@@ -710,6 +723,9 @@ class HomeController {
   }
 
   Future<void> _startLogSession(int generation, ConnectionMode mode) async {
+    if (!persistSessionLogs.value) {
+      return;
+    }
     if (_logSessionRecorder.isActive) {
       return;
     }
@@ -727,7 +743,10 @@ class HomeController {
 
   Future<void> _finishLogSession() async {
     try {
-      await _logSessionRecorder.stop(_clock());
+      await _logSessionRecorder.stop(
+        _clock(),
+        keepSessions: logRetentionSessions.value,
+      );
     } catch (_) {
       _handleStorageError('结束日志会话失败');
     }
@@ -794,11 +813,7 @@ class HomeController {
     unawaited(_stopUsbDeviceMonitoring());
     unawaited(_finishLogSession());
     selectedMode.dispose();
-    payloadFormat.dispose();
-    receiveFormat.dispose();
     textEncoding.dispose();
-    appendCrlf.dispose();
-    autoScroll.dispose();
     isSending.dispose();
     lastError.dispose();
     logs.dispose();

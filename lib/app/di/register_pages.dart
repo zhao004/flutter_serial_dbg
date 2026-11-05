@@ -1,6 +1,10 @@
 import '../database/app_repository.dart';
+import '../pages/home/ble_gatt_controller.dart';
 import '../pages/home/home_controller.dart';
+import '../pages/home/protocol_controller.dart';
+import '../pages/history/log_history_controller.dart';
 import '../pages/settings/appearance_controller.dart';
+import '../pages/settings/communication_settings_controller.dart';
 import '../pages/update/update_controller.dart';
 import '../services/ble/ble_permission_service.dart';
 import '../services/ble/ble_scanner.dart';
@@ -19,6 +23,33 @@ void registerPages() {
       dispose: (controller) => controller.dispose(),
     );
   }
+  if (!getIt.isRegistered<CommunicationSettingsController>()) {
+    getIt.registerLazySingleton<CommunicationSettingsController>(
+      () => CommunicationSettingsController(getIt<AppRepository>()),
+      dispose: (controller) => controller.dispose(),
+    );
+  }
+  if (!getIt.isRegistered<LogHistoryController>()) {
+    getIt.registerLazySingleton<LogHistoryController>(
+      () => LogHistoryController(
+        repository: getIt<AppRepository>(),
+        exporter: getIt<LogExporter>(),
+      ),
+      dispose: (controller) => controller.dispose(),
+    );
+  }
+  if (!getIt.isRegistered<BleGattController>()) {
+    getIt.registerLazySingleton<BleGattController>(
+      BleGattController.new,
+      dispose: (controller) => controller.dispose(),
+    );
+  }
+  if (!getIt.isRegistered<ProtocolController>()) {
+    getIt.registerLazySingleton<ProtocolController>(
+      () => ProtocolController(getIt<AppRepository>()),
+      dispose: (controller) => controller.dispose(),
+    );
+  }
   if (!getIt.isRegistered<HomeController>()) {
     getIt.registerLazySingleton<HomeController>(
       () => HomeController(
@@ -29,6 +60,9 @@ void registerPages() {
         bleScanner: getIt<BleScanner>(),
         blePermissionService: getIt<BlePermissionService>(),
         usbSerialService: getIt<UsbSerialService>(),
+        settingsController: getIt<CommunicationSettingsController>(),
+        bleGattController: getIt<BleGattController>(),
+        protocolController: getIt<ProtocolController>(),
       ),
       dispose: (controller) => controller.dispose(),
     );

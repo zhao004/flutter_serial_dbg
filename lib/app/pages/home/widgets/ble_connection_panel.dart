@@ -1,13 +1,16 @@
 import 'dart:async';
 
+import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:signals/signals_flutter.dart';
 
 import '../../../models/connection_config.dart';
 import '../../../models/connection_mode.dart';
 import '../../../models/connection_state.dart';
+import '../../../routes/app_routes.dart';
 import '../../../theme/app_theme.dart';
 import '../../../widgets/app_surface_card.dart';
+import '../../../widgets/app_toast.dart';
 import '../../../widgets/gradient_primary_button.dart';
 import '../home_controller.dart';
 import 'connection_panel_header.dart';
@@ -65,6 +68,43 @@ class _BleConnectionPanelState extends State<BleConnectionPanel> {
       return;
     }
     await widget.controller.connect(config);
+  }
+
+  Future<void> _configureGatt() async {
+    final selected = widget.controller.selectedBleDevice.value;
+    final current = _savedConfig;
+    final remoteId = selected?.remoteId ?? current?.remoteId;
+    if (remoteId == null) {
+      AppToast.warning(context, '请先选择 BLE 设备');
+      return;
+    }
+    final colors = context.appColors;
+    final configured = await showModalBottomSheet<BleConfig>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: colors.surface,
+      barrierColor: colors.barrier,
+      builder: (context) => _BleGattConfigSheet(
+        initial: current?.remoteId == remoteId
+            ? current!
+            : BleConfig(remoteId: remoteId),
+      ),
+    );
+    if (!mounted || configured == null) {
+      return;
+    }
+    setState(() {
+      _savedConfig = configured;
+    });
+    final saved = await widget.controller.saveConnectionConfig(configured);
+    if (mounted) {
+      if (saved) {
+        AppToast.success(context, 'GATT UUID 配置已保存');
+      } else {
+        AppToast.error(context, '保存 GATT UUID 配置失败');
+      }
+    }
   }
 
   @override
@@ -185,6 +225,24 @@ class _BleConnectionPanelState extends State<BleConnectionPanel> {
                     ),
                   ),
                 ],
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  key: const ValueKey<String>('ble-gatt-action'),
+                  onPressed: connected
+                      ? () => unawaited(context.push<void>(Routes.bleGatt))
+                      : busy || remoteId == null
+                      ? null
+                      : () => unawaited(_configureGatt()),
+                  icon: Icon(
+                    connected
+                        ? Icons.account_tree_outlined
+                        : Icons.tune_rounded,
+                  ),
+                  label: Text(connected ? '查看 GATT 服务' : '手动配置 GATT UUID'),
+                ),
               ),
             ],
           ),
@@ -445,3 +503,155 @@ class _BleScanSheetState extends State<BleScanSheet> {
 }
 
 enum _BleDeviceFilter { all, named, unnamed }
+
+class _BleGattConfigSheet extends StatefulWidget {
+  const _BleGattConfigSheet({required this.initial});
+
+  final BleConfig initial;
+
+  @override
+  State<_BleGattConfigSheet> createState() => _BleGattConfigSheetState();
+}
+
+class _BleGattConfigSheetState extends State<_BleGattConfigSheet> {
+  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+  late final TextEditingController _serviceController;
+  late final TextEditingController _writeController;
+  late final TextEditingController _notifyController;
+  String? _validationError;
+
+  @override
+  void initState() {
+    super.initState();
+    _serviceController = TextEditingController(
+      text: widget.initial.serviceUuid,
+    );
+    _writeController = TextEditingController(
+      text: widget.initial.writeCharacteristicUuid,
+    );
+    _notifyController = TextEditingController(
+      text: widget.initial.notifyCharacteristicUuid,
+    );
+  }
+
+  @override
+  void dispose() {
+    _serviceController.dispose();
+    _writeController.dispose();
+    _notifyController.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    if (!(_formKey.currentState?.validate() ?? false)) {
+      return;
+    }
+    try {
+      final config = BleConfig(
+        remoteId: widget.initial.remoteId,
+        serviceUuid: _optional(_serviceController.text),
+        writeCharacteristicUuid: _optional(_writeController.text),
+        notifyCharacteristicUuid: _optional(_notifyController.text),
+      );
+      Navigator.of(context).pop(config);
+    } on ArgumentError catch (error) {
+      setState(() {
+        _validationError = error.message?.toString() ?? 'GATT UUID 格式无效';
+      });
+    }
+  }
+
+  String? _optional(String value) {
+    final normalized = value.trim();
+    return normalized.isEmpty ? null : normalized;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        16,
+        14,
+        16,
+        16 + MediaQuery.viewInsetsOf(context).bottom,
+      ),
+      child: SingleChildScrollView(
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              Row(
+                children: <Widget>[
+                  Text(
+                    'GATT UUID 配置',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    tooltip: '关闭',
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
+              ),
+              Text(
+                widget.initial.remoteId,
+                style: Theme.of(context).textTheme.bodySmall
+                    ?.copyWith(fontFamily: 'monospace'),
+              ),
+              const SizedBox(height: 14),
+              TextFormField(
+                key: const ValueKey<String>('ble-service-uuid'),
+                controller: _serviceController,
+                decoration: const InputDecoration(
+                  labelText: 'Service UUID（可选）',
+                  hintText: '例如 6E400001-B5A3-F393-E0A9-E50E24DCCA9E',
+                ),
+                autocorrect: false,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                key: const ValueKey<String>('ble-write-uuid'),
+                controller: _writeController,
+                decoration: const InputDecoration(
+                  labelText: 'Write Characteristic UUID（可选）',
+                ),
+                autocorrect: false,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                key: const ValueKey<String>('ble-notify-uuid'),
+                controller: _notifyController,
+                decoration: const InputDecoration(
+                  labelText: 'Notify Characteristic UUID（可选）',
+                ),
+                autocorrect: false,
+              ),
+              if (_validationError != null) ...<Widget>[
+                const SizedBox(height: 8),
+                Text(
+                  _validationError!,
+                  style: TextStyle(color: colors.warning, fontSize: 12),
+                ),
+              ],
+              const SizedBox(height: 10),
+              Text(
+                '留空时连接后自动选择可写特征，并在可用时自动启用通知。',
+                style: TextStyle(color: colors.inkMuted, fontSize: 12),
+              ),
+              const SizedBox(height: 16),
+              FilledButton.icon(
+                onPressed: _submit,
+                icon: const Icon(Icons.check_rounded),
+                label: const Text('应用配置'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

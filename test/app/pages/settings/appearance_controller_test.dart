@@ -6,6 +6,8 @@ import 'package:flutter_serial_dbg/app/models/app_preferences.dart';
 import 'package:flutter_serial_dbg/app/models/connection_config.dart';
 import 'package:flutter_serial_dbg/app/models/connection_mode.dart';
 import 'package:flutter_serial_dbg/app/models/log_entry.dart';
+import 'package:flutter_serial_dbg/app/models/log_session_summary.dart';
+import 'package:flutter_serial_dbg/app/models/protocol_profile.dart';
 import 'package:flutter_serial_dbg/app/pages/settings/appearance_controller.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -117,6 +119,34 @@ final class _AppearanceRepository implements AppRepository {
   Future<List<LogEntry>> loadSessionEntries(int sessionId) async {
     return const <LogEntry>[];
   }
+
+  @override
+  Future<List<LogSessionSummary>> loadLogSessionSummaries({
+    ConnectionMode? mode,
+    int limit = 50,
+    int offset = 0,
+  }) async {
+    return const <LogSessionSummary>[];
+  }
+
+  @override
+  Future<void> deleteLogSession(int sessionId) async {}
+
+  @override
+  Future<void> deleteAllLogSessions() async {}
+
+  @override
+  Future<List<ProtocolProfile>> loadProtocolProfiles() async {
+    return const <ProtocolProfile>[];
+  }
+
+  @override
+  Future<ProtocolProfile> saveProtocolProfile(ProtocolProfile profile) async {
+    return profile;
+  }
+
+  @override
+  Future<void> deleteProtocolProfile(int profileId) async {}
 
   @override
   Future<void> saveAppearancePreferences(

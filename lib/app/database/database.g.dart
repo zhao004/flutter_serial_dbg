@@ -973,6 +973,31 @@ class $AppSettingsTable extends AppSettings
     ),
     defaultValue: const Constant(true),
   );
+  static const VerificationMeta _persistSessionLogsMeta =
+      const VerificationMeta('persistSessionLogs');
+  @override
+  late final GeneratedColumn<bool> persistSessionLogs = GeneratedColumn<bool>(
+    'persist_session_logs',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("persist_session_logs" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
+  static const VerificationMeta _logRetentionSessionsMeta =
+      const VerificationMeta('logRetentionSessions');
+  @override
+  late final GeneratedColumn<int> logRetentionSessions = GeneratedColumn<int>(
+    'log_retention_sessions',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(20),
+  );
   @override
   late final GeneratedColumnWithTypeConverter<DateTime, DateTime> updatedAt =
       GeneratedColumn<DateTime>(
@@ -989,6 +1014,8 @@ class $AppSettingsTable extends AppSettings
     receiveFormat,
     appendCrlf,
     autoScroll,
+    persistSessionLogs,
+    logRetentionSessions,
     updatedAt,
   ];
   @override
@@ -1016,6 +1043,24 @@ class $AppSettingsTable extends AppSettings
       context.handle(
         _autoScrollMeta,
         autoScroll.isAcceptableOrUnknown(data['auto_scroll']!, _autoScrollMeta),
+      );
+    }
+    if (data.containsKey('persist_session_logs')) {
+      context.handle(
+        _persistSessionLogsMeta,
+        persistSessionLogs.isAcceptableOrUnknown(
+          data['persist_session_logs']!,
+          _persistSessionLogsMeta,
+        ),
+      );
+    }
+    if (data.containsKey('log_retention_sessions')) {
+      context.handle(
+        _logRetentionSessionsMeta,
+        logRetentionSessions.isAcceptableOrUnknown(
+          data['log_retention_sessions']!,
+          _logRetentionSessionsMeta,
+        ),
       );
     }
     return context;
@@ -1051,6 +1096,14 @@ class $AppSettingsTable extends AppSettings
         DriftSqlType.bool,
         data['${effectivePrefix}auto_scroll'],
       )!,
+      persistSessionLogs: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}persist_session_logs'],
+      )!,
+      logRetentionSessions: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}log_retention_sessions'],
+      )!,
       updatedAt: $AppSettingsTable.$converterupdatedAt.fromSql(
         attachedDatabase.typeMapping.read(
           DriftSqlType.dateTime,
@@ -1084,6 +1137,8 @@ class AppSettingRecord extends DataClass
   final PayloadFormat receiveFormat;
   final bool appendCrlf;
   final bool autoScroll;
+  final bool persistSessionLogs;
+  final int logRetentionSessions;
   final DateTime updatedAt;
   const AppSettingRecord({
     required this.id,
@@ -1091,6 +1146,8 @@ class AppSettingRecord extends DataClass
     required this.receiveFormat,
     required this.appendCrlf,
     required this.autoScroll,
+    required this.persistSessionLogs,
+    required this.logRetentionSessions,
     required this.updatedAt,
   });
   @override
@@ -1109,6 +1166,8 @@ class AppSettingRecord extends DataClass
     }
     map['append_crlf'] = Variable<bool>(appendCrlf);
     map['auto_scroll'] = Variable<bool>(autoScroll);
+    map['persist_session_logs'] = Variable<bool>(persistSessionLogs);
+    map['log_retention_sessions'] = Variable<int>(logRetentionSessions);
     {
       map['updated_at'] = Variable<DateTime>(
         $AppSettingsTable.$converterupdatedAt.toSql(updatedAt),
@@ -1124,6 +1183,8 @@ class AppSettingRecord extends DataClass
       receiveFormat: Value(receiveFormat),
       appendCrlf: Value(appendCrlf),
       autoScroll: Value(autoScroll),
+      persistSessionLogs: Value(persistSessionLogs),
+      logRetentionSessions: Value(logRetentionSessions),
       updatedAt: Value(updatedAt),
     );
   }
@@ -1143,6 +1204,10 @@ class AppSettingRecord extends DataClass
       ),
       appendCrlf: serializer.fromJson<bool>(json['appendCrlf']),
       autoScroll: serializer.fromJson<bool>(json['autoScroll']),
+      persistSessionLogs: serializer.fromJson<bool>(json['persistSessionLogs']),
+      logRetentionSessions: serializer.fromJson<int>(
+        json['logRetentionSessions'],
+      ),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
     );
   }
@@ -1159,6 +1224,8 @@ class AppSettingRecord extends DataClass
       ),
       'appendCrlf': serializer.toJson<bool>(appendCrlf),
       'autoScroll': serializer.toJson<bool>(autoScroll),
+      'persistSessionLogs': serializer.toJson<bool>(persistSessionLogs),
+      'logRetentionSessions': serializer.toJson<int>(logRetentionSessions),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
     };
   }
@@ -1169,6 +1236,8 @@ class AppSettingRecord extends DataClass
     PayloadFormat? receiveFormat,
     bool? appendCrlf,
     bool? autoScroll,
+    bool? persistSessionLogs,
+    int? logRetentionSessions,
     DateTime? updatedAt,
   }) => AppSettingRecord(
     id: id ?? this.id,
@@ -1176,6 +1245,8 @@ class AppSettingRecord extends DataClass
     receiveFormat: receiveFormat ?? this.receiveFormat,
     appendCrlf: appendCrlf ?? this.appendCrlf,
     autoScroll: autoScroll ?? this.autoScroll,
+    persistSessionLogs: persistSessionLogs ?? this.persistSessionLogs,
+    logRetentionSessions: logRetentionSessions ?? this.logRetentionSessions,
     updatedAt: updatedAt ?? this.updatedAt,
   );
   AppSettingRecord copyWithCompanion(AppSettingsCompanion data) {
@@ -1193,6 +1264,12 @@ class AppSettingRecord extends DataClass
       autoScroll: data.autoScroll.present
           ? data.autoScroll.value
           : this.autoScroll,
+      persistSessionLogs: data.persistSessionLogs.present
+          ? data.persistSessionLogs.value
+          : this.persistSessionLogs,
+      logRetentionSessions: data.logRetentionSessions.present
+          ? data.logRetentionSessions.value
+          : this.logRetentionSessions,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
   }
@@ -1205,6 +1282,8 @@ class AppSettingRecord extends DataClass
           ..write('receiveFormat: $receiveFormat, ')
           ..write('appendCrlf: $appendCrlf, ')
           ..write('autoScroll: $autoScroll, ')
+          ..write('persistSessionLogs: $persistSessionLogs, ')
+          ..write('logRetentionSessions: $logRetentionSessions, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
         .toString();
@@ -1217,6 +1296,8 @@ class AppSettingRecord extends DataClass
     receiveFormat,
     appendCrlf,
     autoScroll,
+    persistSessionLogs,
+    logRetentionSessions,
     updatedAt,
   );
   @override
@@ -1228,6 +1309,8 @@ class AppSettingRecord extends DataClass
           other.receiveFormat == this.receiveFormat &&
           other.appendCrlf == this.appendCrlf &&
           other.autoScroll == this.autoScroll &&
+          other.persistSessionLogs == this.persistSessionLogs &&
+          other.logRetentionSessions == this.logRetentionSessions &&
           other.updatedAt == this.updatedAt);
 }
 
@@ -1237,6 +1320,8 @@ class AppSettingsCompanion extends UpdateCompanion<AppSettingRecord> {
   final Value<PayloadFormat> receiveFormat;
   final Value<bool> appendCrlf;
   final Value<bool> autoScroll;
+  final Value<bool> persistSessionLogs;
+  final Value<int> logRetentionSessions;
   final Value<DateTime> updatedAt;
   const AppSettingsCompanion({
     this.id = const Value.absent(),
@@ -1244,6 +1329,8 @@ class AppSettingsCompanion extends UpdateCompanion<AppSettingRecord> {
     this.receiveFormat = const Value.absent(),
     this.appendCrlf = const Value.absent(),
     this.autoScroll = const Value.absent(),
+    this.persistSessionLogs = const Value.absent(),
+    this.logRetentionSessions = const Value.absent(),
     this.updatedAt = const Value.absent(),
   });
   AppSettingsCompanion.insert({
@@ -1252,6 +1339,8 @@ class AppSettingsCompanion extends UpdateCompanion<AppSettingRecord> {
     this.receiveFormat = const Value.absent(),
     this.appendCrlf = const Value.absent(),
     this.autoScroll = const Value.absent(),
+    this.persistSessionLogs = const Value.absent(),
+    this.logRetentionSessions = const Value.absent(),
     required DateTime updatedAt,
   }) : updatedAt = Value(updatedAt);
   static Insertable<AppSettingRecord> custom({
@@ -1260,6 +1349,8 @@ class AppSettingsCompanion extends UpdateCompanion<AppSettingRecord> {
     Expression<String>? receiveFormat,
     Expression<bool>? appendCrlf,
     Expression<bool>? autoScroll,
+    Expression<bool>? persistSessionLogs,
+    Expression<int>? logRetentionSessions,
     Expression<DateTime>? updatedAt,
   }) {
     return RawValuesInsertable({
@@ -1268,6 +1359,10 @@ class AppSettingsCompanion extends UpdateCompanion<AppSettingRecord> {
       if (receiveFormat != null) 'receive_format': receiveFormat,
       if (appendCrlf != null) 'append_crlf': appendCrlf,
       if (autoScroll != null) 'auto_scroll': autoScroll,
+      if (persistSessionLogs != null)
+        'persist_session_logs': persistSessionLogs,
+      if (logRetentionSessions != null)
+        'log_retention_sessions': logRetentionSessions,
       if (updatedAt != null) 'updated_at': updatedAt,
     });
   }
@@ -1278,6 +1373,8 @@ class AppSettingsCompanion extends UpdateCompanion<AppSettingRecord> {
     Value<PayloadFormat>? receiveFormat,
     Value<bool>? appendCrlf,
     Value<bool>? autoScroll,
+    Value<bool>? persistSessionLogs,
+    Value<int>? logRetentionSessions,
     Value<DateTime>? updatedAt,
   }) {
     return AppSettingsCompanion(
@@ -1286,6 +1383,8 @@ class AppSettingsCompanion extends UpdateCompanion<AppSettingRecord> {
       receiveFormat: receiveFormat ?? this.receiveFormat,
       appendCrlf: appendCrlf ?? this.appendCrlf,
       autoScroll: autoScroll ?? this.autoScroll,
+      persistSessionLogs: persistSessionLogs ?? this.persistSessionLogs,
+      logRetentionSessions: logRetentionSessions ?? this.logRetentionSessions,
       updatedAt: updatedAt ?? this.updatedAt,
     );
   }
@@ -1312,6 +1411,12 @@ class AppSettingsCompanion extends UpdateCompanion<AppSettingRecord> {
     if (autoScroll.present) {
       map['auto_scroll'] = Variable<bool>(autoScroll.value);
     }
+    if (persistSessionLogs.present) {
+      map['persist_session_logs'] = Variable<bool>(persistSessionLogs.value);
+    }
+    if (logRetentionSessions.present) {
+      map['log_retention_sessions'] = Variable<int>(logRetentionSessions.value);
+    }
     if (updatedAt.present) {
       map['updated_at'] = Variable<DateTime>(
         $AppSettingsTable.$converterupdatedAt.toSql(updatedAt.value),
@@ -1328,6 +1433,8 @@ class AppSettingsCompanion extends UpdateCompanion<AppSettingRecord> {
           ..write('receiveFormat: $receiveFormat, ')
           ..write('appendCrlf: $appendCrlf, ')
           ..write('autoScroll: $autoScroll, ')
+          ..write('persistSessionLogs: $persistSessionLogs, ')
+          ..write('logRetentionSessions: $logRetentionSessions, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
         .toString();
@@ -2413,6 +2520,631 @@ class LogEntriesCompanion extends UpdateCompanion<LogEntryRow> {
   }
 }
 
+class $ProtocolProfilesTable extends ProtocolProfiles
+    with TableInfo<$ProtocolProfilesTable, ProtocolProfileRecord> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ProtocolProfilesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    additionalChecks: GeneratedColumn.checkTextLength(
+      minTextLength: 1,
+      maxTextLength: 40,
+    ),
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _headerMeta = const VerificationMeta('header');
+  @override
+  late final GeneratedColumn<Uint8List> header = GeneratedColumn<Uint8List>(
+    'header',
+    aliasedName,
+    false,
+    type: DriftSqlType.blob,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _commandOffsetMeta = const VerificationMeta(
+    'commandOffset',
+  );
+  @override
+  late final GeneratedColumn<int> commandOffset = GeneratedColumn<int>(
+    'command_offset',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _lengthOffsetMeta = const VerificationMeta(
+    'lengthOffset',
+  );
+  @override
+  late final GeneratedColumn<int> lengthOffset = GeneratedColumn<int>(
+    'length_offset',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _payloadOffsetMeta = const VerificationMeta(
+    'payloadOffset',
+  );
+  @override
+  late final GeneratedColumn<int> payloadOffset = GeneratedColumn<int>(
+    'payload_offset',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _checksumStartOffsetMeta =
+      const VerificationMeta('checksumStartOffset');
+  @override
+  late final GeneratedColumn<int> checksumStartOffset = GeneratedColumn<int>(
+    'checksum_start_offset',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _maxPayloadBytesMeta = const VerificationMeta(
+    'maxPayloadBytes',
+  );
+  @override
+  late final GeneratedColumn<int> maxPayloadBytes = GeneratedColumn<int>(
+    'max_payload_bytes',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(255),
+  );
+  @override
+  late final GeneratedColumnWithTypeConverter<DateTime, DateTime> createdAt =
+      GeneratedColumn<DateTime>(
+        'created_at',
+        aliasedName,
+        false,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: true,
+      ).withConverter<DateTime>($ProtocolProfilesTable.$convertercreatedAt);
+  @override
+  late final GeneratedColumnWithTypeConverter<DateTime, DateTime> updatedAt =
+      GeneratedColumn<DateTime>(
+        'updated_at',
+        aliasedName,
+        false,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: true,
+      ).withConverter<DateTime>($ProtocolProfilesTable.$converterupdatedAt);
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    name,
+    header,
+    commandOffset,
+    lengthOffset,
+    payloadOffset,
+    checksumStartOffset,
+    maxPayloadBytes,
+    createdAt,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'protocol_profiles';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<ProtocolProfileRecord> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('header')) {
+      context.handle(
+        _headerMeta,
+        header.isAcceptableOrUnknown(data['header']!, _headerMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_headerMeta);
+    }
+    if (data.containsKey('command_offset')) {
+      context.handle(
+        _commandOffsetMeta,
+        commandOffset.isAcceptableOrUnknown(
+          data['command_offset']!,
+          _commandOffsetMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_commandOffsetMeta);
+    }
+    if (data.containsKey('length_offset')) {
+      context.handle(
+        _lengthOffsetMeta,
+        lengthOffset.isAcceptableOrUnknown(
+          data['length_offset']!,
+          _lengthOffsetMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_lengthOffsetMeta);
+    }
+    if (data.containsKey('payload_offset')) {
+      context.handle(
+        _payloadOffsetMeta,
+        payloadOffset.isAcceptableOrUnknown(
+          data['payload_offset']!,
+          _payloadOffsetMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_payloadOffsetMeta);
+    }
+    if (data.containsKey('checksum_start_offset')) {
+      context.handle(
+        _checksumStartOffsetMeta,
+        checksumStartOffset.isAcceptableOrUnknown(
+          data['checksum_start_offset']!,
+          _checksumStartOffsetMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_checksumStartOffsetMeta);
+    }
+    if (data.containsKey('max_payload_bytes')) {
+      context.handle(
+        _maxPayloadBytesMeta,
+        maxPayloadBytes.isAcceptableOrUnknown(
+          data['max_payload_bytes']!,
+          _maxPayloadBytesMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  ProtocolProfileRecord map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ProtocolProfileRecord(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      header: attachedDatabase.typeMapping.read(
+        DriftSqlType.blob,
+        data['${effectivePrefix}header'],
+      )!,
+      commandOffset: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}command_offset'],
+      )!,
+      lengthOffset: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}length_offset'],
+      )!,
+      payloadOffset: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}payload_offset'],
+      )!,
+      checksumStartOffset: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}checksum_start_offset'],
+      )!,
+      maxPayloadBytes: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}max_payload_bytes'],
+      )!,
+      createdAt: $ProtocolProfilesTable.$convertercreatedAt.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.dateTime,
+          data['${effectivePrefix}created_at'],
+        )!,
+      ),
+      updatedAt: $ProtocolProfilesTable.$converterupdatedAt.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.dateTime,
+          data['${effectivePrefix}updated_at'],
+        )!,
+      ),
+    );
+  }
+
+  @override
+  $ProtocolProfilesTable createAlias(String alias) {
+    return $ProtocolProfilesTable(attachedDatabase, alias);
+  }
+
+  static TypeConverter<DateTime, DateTime> $convertercreatedAt =
+      const UtcDateTimeConverter();
+  static TypeConverter<DateTime, DateTime> $converterupdatedAt =
+      const UtcDateTimeConverter();
+}
+
+class ProtocolProfileRecord extends DataClass
+    implements Insertable<ProtocolProfileRecord> {
+  final int id;
+  final String name;
+  final Uint8List header;
+  final int commandOffset;
+  final int lengthOffset;
+  final int payloadOffset;
+  final int checksumStartOffset;
+  final int maxPayloadBytes;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  const ProtocolProfileRecord({
+    required this.id,
+    required this.name,
+    required this.header,
+    required this.commandOffset,
+    required this.lengthOffset,
+    required this.payloadOffset,
+    required this.checksumStartOffset,
+    required this.maxPayloadBytes,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['name'] = Variable<String>(name);
+    map['header'] = Variable<Uint8List>(header);
+    map['command_offset'] = Variable<int>(commandOffset);
+    map['length_offset'] = Variable<int>(lengthOffset);
+    map['payload_offset'] = Variable<int>(payloadOffset);
+    map['checksum_start_offset'] = Variable<int>(checksumStartOffset);
+    map['max_payload_bytes'] = Variable<int>(maxPayloadBytes);
+    {
+      map['created_at'] = Variable<DateTime>(
+        $ProtocolProfilesTable.$convertercreatedAt.toSql(createdAt),
+      );
+    }
+    {
+      map['updated_at'] = Variable<DateTime>(
+        $ProtocolProfilesTable.$converterupdatedAt.toSql(updatedAt),
+      );
+    }
+    return map;
+  }
+
+  ProtocolProfilesCompanion toCompanion(bool nullToAbsent) {
+    return ProtocolProfilesCompanion(
+      id: Value(id),
+      name: Value(name),
+      header: Value(header),
+      commandOffset: Value(commandOffset),
+      lengthOffset: Value(lengthOffset),
+      payloadOffset: Value(payloadOffset),
+      checksumStartOffset: Value(checksumStartOffset),
+      maxPayloadBytes: Value(maxPayloadBytes),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory ProtocolProfileRecord.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ProtocolProfileRecord(
+      id: serializer.fromJson<int>(json['id']),
+      name: serializer.fromJson<String>(json['name']),
+      header: serializer.fromJson<Uint8List>(json['header']),
+      commandOffset: serializer.fromJson<int>(json['commandOffset']),
+      lengthOffset: serializer.fromJson<int>(json['lengthOffset']),
+      payloadOffset: serializer.fromJson<int>(json['payloadOffset']),
+      checksumStartOffset: serializer.fromJson<int>(
+        json['checksumStartOffset'],
+      ),
+      maxPayloadBytes: serializer.fromJson<int>(json['maxPayloadBytes']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'name': serializer.toJson<String>(name),
+      'header': serializer.toJson<Uint8List>(header),
+      'commandOffset': serializer.toJson<int>(commandOffset),
+      'lengthOffset': serializer.toJson<int>(lengthOffset),
+      'payloadOffset': serializer.toJson<int>(payloadOffset),
+      'checksumStartOffset': serializer.toJson<int>(checksumStartOffset),
+      'maxPayloadBytes': serializer.toJson<int>(maxPayloadBytes),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  ProtocolProfileRecord copyWith({
+    int? id,
+    String? name,
+    Uint8List? header,
+    int? commandOffset,
+    int? lengthOffset,
+    int? payloadOffset,
+    int? checksumStartOffset,
+    int? maxPayloadBytes,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) => ProtocolProfileRecord(
+    id: id ?? this.id,
+    name: name ?? this.name,
+    header: header ?? this.header,
+    commandOffset: commandOffset ?? this.commandOffset,
+    lengthOffset: lengthOffset ?? this.lengthOffset,
+    payloadOffset: payloadOffset ?? this.payloadOffset,
+    checksumStartOffset: checksumStartOffset ?? this.checksumStartOffset,
+    maxPayloadBytes: maxPayloadBytes ?? this.maxPayloadBytes,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  ProtocolProfileRecord copyWithCompanion(ProtocolProfilesCompanion data) {
+    return ProtocolProfileRecord(
+      id: data.id.present ? data.id.value : this.id,
+      name: data.name.present ? data.name.value : this.name,
+      header: data.header.present ? data.header.value : this.header,
+      commandOffset: data.commandOffset.present
+          ? data.commandOffset.value
+          : this.commandOffset,
+      lengthOffset: data.lengthOffset.present
+          ? data.lengthOffset.value
+          : this.lengthOffset,
+      payloadOffset: data.payloadOffset.present
+          ? data.payloadOffset.value
+          : this.payloadOffset,
+      checksumStartOffset: data.checksumStartOffset.present
+          ? data.checksumStartOffset.value
+          : this.checksumStartOffset,
+      maxPayloadBytes: data.maxPayloadBytes.present
+          ? data.maxPayloadBytes.value
+          : this.maxPayloadBytes,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ProtocolProfileRecord(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('header: $header, ')
+          ..write('commandOffset: $commandOffset, ')
+          ..write('lengthOffset: $lengthOffset, ')
+          ..write('payloadOffset: $payloadOffset, ')
+          ..write('checksumStartOffset: $checksumStartOffset, ')
+          ..write('maxPayloadBytes: $maxPayloadBytes, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    name,
+    $driftBlobEquality.hash(header),
+    commandOffset,
+    lengthOffset,
+    payloadOffset,
+    checksumStartOffset,
+    maxPayloadBytes,
+    createdAt,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ProtocolProfileRecord &&
+          other.id == this.id &&
+          other.name == this.name &&
+          $driftBlobEquality.equals(other.header, this.header) &&
+          other.commandOffset == this.commandOffset &&
+          other.lengthOffset == this.lengthOffset &&
+          other.payloadOffset == this.payloadOffset &&
+          other.checksumStartOffset == this.checksumStartOffset &&
+          other.maxPayloadBytes == this.maxPayloadBytes &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class ProtocolProfilesCompanion extends UpdateCompanion<ProtocolProfileRecord> {
+  final Value<int> id;
+  final Value<String> name;
+  final Value<Uint8List> header;
+  final Value<int> commandOffset;
+  final Value<int> lengthOffset;
+  final Value<int> payloadOffset;
+  final Value<int> checksumStartOffset;
+  final Value<int> maxPayloadBytes;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  const ProtocolProfilesCompanion({
+    this.id = const Value.absent(),
+    this.name = const Value.absent(),
+    this.header = const Value.absent(),
+    this.commandOffset = const Value.absent(),
+    this.lengthOffset = const Value.absent(),
+    this.payloadOffset = const Value.absent(),
+    this.checksumStartOffset = const Value.absent(),
+    this.maxPayloadBytes = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+  });
+  ProtocolProfilesCompanion.insert({
+    this.id = const Value.absent(),
+    required String name,
+    required Uint8List header,
+    required int commandOffset,
+    required int lengthOffset,
+    required int payloadOffset,
+    required int checksumStartOffset,
+    this.maxPayloadBytes = const Value.absent(),
+    required DateTime createdAt,
+    required DateTime updatedAt,
+  }) : name = Value(name),
+       header = Value(header),
+       commandOffset = Value(commandOffset),
+       lengthOffset = Value(lengthOffset),
+       payloadOffset = Value(payloadOffset),
+       checksumStartOffset = Value(checksumStartOffset),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
+  static Insertable<ProtocolProfileRecord> custom({
+    Expression<int>? id,
+    Expression<String>? name,
+    Expression<Uint8List>? header,
+    Expression<int>? commandOffset,
+    Expression<int>? lengthOffset,
+    Expression<int>? payloadOffset,
+    Expression<int>? checksumStartOffset,
+    Expression<int>? maxPayloadBytes,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (name != null) 'name': name,
+      if (header != null) 'header': header,
+      if (commandOffset != null) 'command_offset': commandOffset,
+      if (lengthOffset != null) 'length_offset': lengthOffset,
+      if (payloadOffset != null) 'payload_offset': payloadOffset,
+      if (checksumStartOffset != null)
+        'checksum_start_offset': checksumStartOffset,
+      if (maxPayloadBytes != null) 'max_payload_bytes': maxPayloadBytes,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+    });
+  }
+
+  ProtocolProfilesCompanion copyWith({
+    Value<int>? id,
+    Value<String>? name,
+    Value<Uint8List>? header,
+    Value<int>? commandOffset,
+    Value<int>? lengthOffset,
+    Value<int>? payloadOffset,
+    Value<int>? checksumStartOffset,
+    Value<int>? maxPayloadBytes,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+  }) {
+    return ProtocolProfilesCompanion(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      header: header ?? this.header,
+      commandOffset: commandOffset ?? this.commandOffset,
+      lengthOffset: lengthOffset ?? this.lengthOffset,
+      payloadOffset: payloadOffset ?? this.payloadOffset,
+      checksumStartOffset: checksumStartOffset ?? this.checksumStartOffset,
+      maxPayloadBytes: maxPayloadBytes ?? this.maxPayloadBytes,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (header.present) {
+      map['header'] = Variable<Uint8List>(header.value);
+    }
+    if (commandOffset.present) {
+      map['command_offset'] = Variable<int>(commandOffset.value);
+    }
+    if (lengthOffset.present) {
+      map['length_offset'] = Variable<int>(lengthOffset.value);
+    }
+    if (payloadOffset.present) {
+      map['payload_offset'] = Variable<int>(payloadOffset.value);
+    }
+    if (checksumStartOffset.present) {
+      map['checksum_start_offset'] = Variable<int>(checksumStartOffset.value);
+    }
+    if (maxPayloadBytes.present) {
+      map['max_payload_bytes'] = Variable<int>(maxPayloadBytes.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(
+        $ProtocolProfilesTable.$convertercreatedAt.toSql(createdAt.value),
+      );
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(
+        $ProtocolProfilesTable.$converterupdatedAt.toSql(updatedAt.value),
+      );
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ProtocolProfilesCompanion(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('header: $header, ')
+          ..write('commandOffset: $commandOffset, ')
+          ..write('lengthOffset: $lengthOffset, ')
+          ..write('payloadOffset: $payloadOffset, ')
+          ..write('checksumStartOffset: $checksumStartOffset, ')
+          ..write('maxPayloadBytes: $maxPayloadBytes, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -2423,6 +3155,9 @@ abstract class _$AppDatabase extends GeneratedDatabase {
       $AppearanceSettingsTable(this);
   late final $LogSessionsTable logSessions = $LogSessionsTable(this);
   late final $LogEntriesTable logEntries = $LogEntriesTable(this);
+  late final $ProtocolProfilesTable protocolProfiles = $ProtocolProfilesTable(
+    this,
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -2433,6 +3168,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     appearanceSettings,
     logSessions,
     logEntries,
+    protocolProfiles,
   ];
   @override
   StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules([
@@ -2876,6 +3612,8 @@ typedef $$AppSettingsTableCreateCompanionBuilder =
       Value<PayloadFormat> receiveFormat,
       Value<bool> appendCrlf,
       Value<bool> autoScroll,
+      Value<bool> persistSessionLogs,
+      Value<int> logRetentionSessions,
       required DateTime updatedAt,
     });
 typedef $$AppSettingsTableUpdateCompanionBuilder =
@@ -2885,6 +3623,8 @@ typedef $$AppSettingsTableUpdateCompanionBuilder =
       Value<PayloadFormat> receiveFormat,
       Value<bool> appendCrlf,
       Value<bool> autoScroll,
+      Value<bool> persistSessionLogs,
+      Value<int> logRetentionSessions,
       Value<DateTime> updatedAt,
     });
 
@@ -2921,6 +3661,16 @@ class $$AppSettingsTableFilterComposer
 
   ColumnFilters<bool> get autoScroll => $composableBuilder(
     column: $table.autoScroll,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get persistSessionLogs => $composableBuilder(
+    column: $table.persistSessionLogs,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get logRetentionSessions => $composableBuilder(
+    column: $table.logRetentionSessions,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -2965,6 +3715,16 @@ class $$AppSettingsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get persistSessionLogs => $composableBuilder(
+    column: $table.persistSessionLogs,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get logRetentionSessions => $composableBuilder(
+    column: $table.logRetentionSessions,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
     column: $table.updatedAt,
     builder: (column) => ColumnOrderings(column),
@@ -3002,6 +3762,16 @@ class $$AppSettingsTableAnnotationComposer
 
   GeneratedColumn<bool> get autoScroll => $composableBuilder(
     column: $table.autoScroll,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get persistSessionLogs => $composableBuilder(
+    column: $table.persistSessionLogs,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get logRetentionSessions => $composableBuilder(
+    column: $table.logRetentionSessions,
     builder: (column) => column,
   );
 
@@ -3045,6 +3815,8 @@ class $$AppSettingsTableTableManager
                 Value<PayloadFormat> receiveFormat = const Value.absent(),
                 Value<bool> appendCrlf = const Value.absent(),
                 Value<bool> autoScroll = const Value.absent(),
+                Value<bool> persistSessionLogs = const Value.absent(),
+                Value<int> logRetentionSessions = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
               }) => AppSettingsCompanion(
                 id: id,
@@ -3052,6 +3824,8 @@ class $$AppSettingsTableTableManager
                 receiveFormat: receiveFormat,
                 appendCrlf: appendCrlf,
                 autoScroll: autoScroll,
+                persistSessionLogs: persistSessionLogs,
+                logRetentionSessions: logRetentionSessions,
                 updatedAt: updatedAt,
               ),
           createCompanionCallback:
@@ -3061,6 +3835,8 @@ class $$AppSettingsTableTableManager
                 Value<PayloadFormat> receiveFormat = const Value.absent(),
                 Value<bool> appendCrlf = const Value.absent(),
                 Value<bool> autoScroll = const Value.absent(),
+                Value<bool> persistSessionLogs = const Value.absent(),
+                Value<int> logRetentionSessions = const Value.absent(),
                 required DateTime updatedAt,
               }) => AppSettingsCompanion.insert(
                 id: id,
@@ -3068,6 +3844,8 @@ class $$AppSettingsTableTableManager
                 receiveFormat: receiveFormat,
                 appendCrlf: appendCrlf,
                 autoScroll: autoScroll,
+                persistSessionLogs: persistSessionLogs,
+                logRetentionSessions: logRetentionSessions,
                 updatedAt: updatedAt,
               ),
           withReferenceMapper: (p0) => p0
@@ -3935,6 +4713,328 @@ typedef $$LogEntriesTableProcessedTableManager =
       LogEntryRow,
       PrefetchHooks Function({bool sessionId})
     >;
+typedef $$ProtocolProfilesTableCreateCompanionBuilder =
+    ProtocolProfilesCompanion Function({
+      Value<int> id,
+      required String name,
+      required Uint8List header,
+      required int commandOffset,
+      required int lengthOffset,
+      required int payloadOffset,
+      required int checksumStartOffset,
+      Value<int> maxPayloadBytes,
+      required DateTime createdAt,
+      required DateTime updatedAt,
+    });
+typedef $$ProtocolProfilesTableUpdateCompanionBuilder =
+    ProtocolProfilesCompanion Function({
+      Value<int> id,
+      Value<String> name,
+      Value<Uint8List> header,
+      Value<int> commandOffset,
+      Value<int> lengthOffset,
+      Value<int> payloadOffset,
+      Value<int> checksumStartOffset,
+      Value<int> maxPayloadBytes,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+    });
+
+class $$ProtocolProfilesTableFilterComposer
+    extends Composer<_$AppDatabase, $ProtocolProfilesTable> {
+  $$ProtocolProfilesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<Uint8List> get header => $composableBuilder(
+    column: $table.header,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get commandOffset => $composableBuilder(
+    column: $table.commandOffset,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get lengthOffset => $composableBuilder(
+    column: $table.lengthOffset,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get payloadOffset => $composableBuilder(
+    column: $table.payloadOffset,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get checksumStartOffset => $composableBuilder(
+    column: $table.checksumStartOffset,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get maxPayloadBytes => $composableBuilder(
+    column: $table.maxPayloadBytes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnWithTypeConverterFilters<DateTime, DateTime, DateTime> get createdAt =>
+      $composableBuilder(
+        column: $table.createdAt,
+        builder: (column) => ColumnWithTypeConverterFilters(column),
+      );
+
+  ColumnWithTypeConverterFilters<DateTime, DateTime, DateTime> get updatedAt =>
+      $composableBuilder(
+        column: $table.updatedAt,
+        builder: (column) => ColumnWithTypeConverterFilters(column),
+      );
+}
+
+class $$ProtocolProfilesTableOrderingComposer
+    extends Composer<_$AppDatabase, $ProtocolProfilesTable> {
+  $$ProtocolProfilesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<Uint8List> get header => $composableBuilder(
+    column: $table.header,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get commandOffset => $composableBuilder(
+    column: $table.commandOffset,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get lengthOffset => $composableBuilder(
+    column: $table.lengthOffset,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get payloadOffset => $composableBuilder(
+    column: $table.payloadOffset,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get checksumStartOffset => $composableBuilder(
+    column: $table.checksumStartOffset,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get maxPayloadBytes => $composableBuilder(
+    column: $table.maxPayloadBytes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$ProtocolProfilesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ProtocolProfilesTable> {
+  $$ProtocolProfilesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<Uint8List> get header =>
+      $composableBuilder(column: $table.header, builder: (column) => column);
+
+  GeneratedColumn<int> get commandOffset => $composableBuilder(
+    column: $table.commandOffset,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get lengthOffset => $composableBuilder(
+    column: $table.lengthOffset,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get payloadOffset => $composableBuilder(
+    column: $table.payloadOffset,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get checksumStartOffset => $composableBuilder(
+    column: $table.checksumStartOffset,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get maxPayloadBytes => $composableBuilder(
+    column: $table.maxPayloadBytes,
+    builder: (column) => column,
+  );
+
+  GeneratedColumnWithTypeConverter<DateTime, DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumnWithTypeConverter<DateTime, DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$ProtocolProfilesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $ProtocolProfilesTable,
+          ProtocolProfileRecord,
+          $$ProtocolProfilesTableFilterComposer,
+          $$ProtocolProfilesTableOrderingComposer,
+          $$ProtocolProfilesTableAnnotationComposer,
+          $$ProtocolProfilesTableCreateCompanionBuilder,
+          $$ProtocolProfilesTableUpdateCompanionBuilder,
+          (
+            ProtocolProfileRecord,
+            BaseReferences<
+              _$AppDatabase,
+              $ProtocolProfilesTable,
+              ProtocolProfileRecord
+            >,
+          ),
+          ProtocolProfileRecord,
+          PrefetchHooks Function()
+        > {
+  $$ProtocolProfilesTableTableManager(
+    _$AppDatabase db,
+    $ProtocolProfilesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ProtocolProfilesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ProtocolProfilesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ProtocolProfilesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<Uint8List> header = const Value.absent(),
+                Value<int> commandOffset = const Value.absent(),
+                Value<int> lengthOffset = const Value.absent(),
+                Value<int> payloadOffset = const Value.absent(),
+                Value<int> checksumStartOffset = const Value.absent(),
+                Value<int> maxPayloadBytes = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+              }) => ProtocolProfilesCompanion(
+                id: id,
+                name: name,
+                header: header,
+                commandOffset: commandOffset,
+                lengthOffset: lengthOffset,
+                payloadOffset: payloadOffset,
+                checksumStartOffset: checksumStartOffset,
+                maxPayloadBytes: maxPayloadBytes,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required String name,
+                required Uint8List header,
+                required int commandOffset,
+                required int lengthOffset,
+                required int payloadOffset,
+                required int checksumStartOffset,
+                Value<int> maxPayloadBytes = const Value.absent(),
+                required DateTime createdAt,
+                required DateTime updatedAt,
+              }) => ProtocolProfilesCompanion.insert(
+                id: id,
+                name: name,
+                header: header,
+                commandOffset: commandOffset,
+                lengthOffset: lengthOffset,
+                payloadOffset: payloadOffset,
+                checksumStartOffset: checksumStartOffset,
+                maxPayloadBytes: maxPayloadBytes,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$ProtocolProfilesTable, ProtocolProfileRecord>(
+                    table,
+                  ),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $ProtocolProfilesTable,
+                    ProtocolProfileRecord
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$ProtocolProfilesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $ProtocolProfilesTable,
+      ProtocolProfileRecord,
+      $$ProtocolProfilesTableFilterComposer,
+      $$ProtocolProfilesTableOrderingComposer,
+      $$ProtocolProfilesTableAnnotationComposer,
+      $$ProtocolProfilesTableCreateCompanionBuilder,
+      $$ProtocolProfilesTableUpdateCompanionBuilder,
+      (
+        ProtocolProfileRecord,
+        BaseReferences<
+          _$AppDatabase,
+          $ProtocolProfilesTable,
+          ProtocolProfileRecord
+        >,
+      ),
+      ProtocolProfileRecord,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -3949,4 +5049,6 @@ class $AppDatabaseManager {
       $$LogSessionsTableTableManager(_db, _db.logSessions);
   $$LogEntriesTableTableManager get logEntries =>
       $$LogEntriesTableTableManager(_db, _db.logEntries);
+  $$ProtocolProfilesTableTableManager get protocolProfiles =>
+      $$ProtocolProfilesTableTableManager(_db, _db.protocolProfiles);
 }

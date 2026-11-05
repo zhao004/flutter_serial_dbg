@@ -9,6 +9,7 @@ import 'package:flutter_serial_dbg/app/models/app_preferences.dart';
 import 'package:flutter_serial_dbg/app/models/connection_config.dart';
 import 'package:flutter_serial_dbg/app/models/connection_mode.dart';
 import 'package:flutter_serial_dbg/app/models/log_entry.dart';
+import 'package:flutter_serial_dbg/app/models/protocol_profile.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -93,6 +94,8 @@ void main() {
       receiveFormat: PayloadFormat.hex,
       appendCrlf: true,
       autoScroll: false,
+      persistSessionLogs: false,
+      logRetentionSessions: 10,
     );
 
     await repository.savePreferences(preferences);
@@ -102,6 +105,8 @@ void main() {
     expect(loaded.receiveFormat, PayloadFormat.hex);
     expect(loaded.appendCrlf, isTrue);
     expect(loaded.autoScroll, isFalse);
+    expect(loaded.persistSessionLogs, isFalse);
+    expect(loaded.logRetentionSessions, 10);
   });
 
   test('repeated application saves keep the latest singleton row', () async {
@@ -259,6 +264,70 @@ void main() {
 
     expect(await repository.loadSessionEntries(firstSession), isEmpty);
     expect(await repository.loadSessionEntries(secondSession), hasLength(1));
+  });
+
+  test(
+    'loads session summaries and deletes sessions with their entries',
+    () async {
+      final sessionId = await repository.startLogSession(
+        ConnectionMode.tcpClient,
+        DateTime.utc(2026, 1, 1),
+      );
+      await repository.appendLogEntries(sessionId, <LogEntry>[
+        _entry(LogDirection.sent, <int>[0x01, 0x02]),
+        _entry(LogDirection.received, <int>[0xAA, 0x55, 0x10]),
+      ]);
+      await repository.endLogSession(sessionId, DateTime.utc(2026, 1, 1, 0, 1));
+
+      final summaries = await repository.loadLogSessionSummaries();
+
+      expect(summaries, hasLength(1));
+      expect(summaries.single.id, sessionId);
+      expect(summaries.single.entryCount, 2);
+      expect(summaries.single.byteCount, 5);
+      expect(summaries.single.duration, const Duration(minutes: 1));
+
+      await repository.deleteLogSession(sessionId);
+
+      expect(await repository.loadLogSessionSummaries(), isEmpty);
+      expect(await repository.loadSessionEntries(sessionId), isEmpty);
+    },
+  );
+
+  test('creates, updates and deletes protocol profiles', () async {
+    final created = await repository.saveProtocolProfile(
+      ProtocolProfile(
+        name: '测试协议',
+        header: const <int>[0xAA, 0x55],
+        maxPayloadBytes: 64,
+      ),
+    );
+
+    expect(created.id, isNotNull);
+    expect((await repository.loadProtocolProfiles()).single.name, '测试协议');
+
+    final updated = await repository.saveProtocolProfile(
+      ProtocolProfile(
+        id: created.id,
+        name: '更新协议',
+        header: const <int>[0x7E],
+        commandOffset: 1,
+        lengthOffset: 2,
+        payloadOffset: 3,
+        checksumStartOffset: 1,
+        maxPayloadBytes: 32,
+      ),
+    );
+
+    expect(updated.name, '更新协议');
+    expect(
+      (await repository.loadProtocolProfiles()).single.maxPayloadBytes,
+      32,
+    );
+
+    await repository.deleteProtocolProfile(created.id!);
+
+    expect(await repository.loadProtocolProfiles(), isEmpty);
   });
 }
 

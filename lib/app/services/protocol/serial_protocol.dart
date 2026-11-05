@@ -27,6 +27,7 @@ final class Aa55FrameProfile {
     this.lengthOffset = 3,
     this.payloadOffset = 4,
     this.checksumStartOffset = 2,
+    this.maxPayloadBytes = ProtocolLimits.maxAa55PayloadBytes,
   }) : header = List<int>.unmodifiable(List<int>.from(header)) {
     if (header.isEmpty) {
       throw ArgumentError.value(header, 'header', '帧头不能为空');
@@ -44,6 +45,13 @@ final class Aa55FrameProfile {
         checksumStartOffset >= payloadOffset) {
       throw ArgumentError('AA55 profile 的校验范围无效');
     }
+    if (maxPayloadBytes <= 0 || maxPayloadBytes > 0xFF) {
+      throw ArgumentError.value(
+        maxPayloadBytes,
+        'maxPayloadBytes',
+        '必须位于 1 到 255 之间',
+      );
+    }
   }
 
   final List<int> header;
@@ -51,13 +59,18 @@ final class Aa55FrameProfile {
   final int lengthOffset;
   final int payloadOffset;
   final int checksumStartOffset;
+  final int maxPayloadBytes;
 
   /// 根据长度字段计算包含校验字节的完整帧长度。
   int? resolveFrameLength(List<int> bytes) {
     if (bytes.length <= lengthOffset) {
       return null;
     }
-    return payloadOffset + bytes[lengthOffset] + 1;
+    final payloadLength = bytes[lengthOffset];
+    if (payloadLength > maxPayloadBytes) {
+      throw const FormatException('协议负载长度超过 Profile 上限');
+    }
+    return payloadOffset + payloadLength + 1;
   }
 
   /// 验证候选帧的 XOR 校验字节。
@@ -120,11 +133,11 @@ final class Aa55SerialProtocol implements SerialProtocol {
     if (command < 0 || command > 0xFF) {
       throw ArgumentError.value(command, 'command', '必须是单字节值');
     }
-    if (payload.length > ProtocolLimits.maxAa55PayloadBytes) {
+    if (payload.length > profile.maxPayloadBytes) {
       throw ArgumentError.value(
         payload.length,
         'payload',
-        '临时 AA55 profile 负载不能超过 255 字节',
+        '协议 Profile 负载不能超过 ${profile.maxPayloadBytes} 字节',
       );
     }
 

@@ -5,6 +5,7 @@ import 'package:flutter_serial_dbg/app/models/appearance_preferences.dart';
 import 'package:flutter_serial_dbg/app/models/connection_config.dart';
 import 'package:flutter_serial_dbg/app/models/connection_mode.dart';
 import 'package:flutter_serial_dbg/app/models/log_entry.dart';
+import 'package:flutter_serial_dbg/app/models/protocol_profile.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -27,6 +28,16 @@ void main() {
             data_bits INTEGER NULL,
             stop_bits TEXT NULL,
             parity TEXT NULL,
+            updated_at INTEGER NOT NULL
+          )
+        ''');
+        database.execute('''
+          CREATE TABLE app_settings (
+            id INTEGER NOT NULL PRIMARY KEY,
+            send_format TEXT NOT NULL DEFAULT 'text',
+            receive_format TEXT NOT NULL DEFAULT 'text',
+            append_crlf INTEGER NOT NULL DEFAULT 0,
+            auto_scroll INTEGER NOT NULL DEFAULT 1,
             updated_at INTEGER NOT NULL
           )
         ''');
@@ -113,4 +124,50 @@ void main() {
       expect(saved.preset, AppThemePreset.tealM3);
     },
   );
+
+  test('upgrades schema 3 settings and creates protocol profiles', () async {
+    final executor = NativeDatabase.memory(
+      setup: (database) {
+        database.execute('''
+          CREATE TABLE app_settings (
+            id INTEGER NOT NULL PRIMARY KEY,
+            send_format TEXT NOT NULL DEFAULT 'text',
+            receive_format TEXT NOT NULL DEFAULT 'text',
+            append_crlf INTEGER NOT NULL DEFAULT 0,
+            auto_scroll INTEGER NOT NULL DEFAULT 1,
+            updated_at INTEGER NOT NULL
+          )
+        ''');
+        database.execute('''
+          INSERT INTO app_settings (
+            id,
+            send_format,
+            receive_format,
+            append_crlf,
+            auto_scroll,
+            updated_at
+          ) VALUES (1, 'hex', 'text', 1, 0, 1767225600)
+        ''');
+        database.userVersion = 3;
+      },
+    );
+    final database = AppDatabase.forTesting(executor);
+    final repository = DriftAppRepository(
+      database: database,
+      clock: () => DateTime.utc(2026),
+    );
+    addTearDown(repository.close);
+
+    final preferences = await repository.loadPreferences();
+
+    expect(preferences.sendFormat, PayloadFormat.hex);
+    expect(preferences.persistSessionLogs, isTrue);
+    expect(preferences.logRetentionSessions, 20);
+    expect(
+      await repository.saveProtocolProfile(
+        ProtocolProfile(name: '迁移后协议', header: const <int>[0xAA, 0x55]),
+      ),
+      isA<ProtocolProfile>().having((value) => value.id, 'id', isNotNull),
+    );
+  });
 }
