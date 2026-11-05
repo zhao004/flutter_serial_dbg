@@ -1,7 +1,7 @@
 name: flutter_serial_dbg
 description: "SerialDbg：Android 优先的串口与网络调试工具。"
 publish_to: 'none'
-version: 1.0.0+1
+version: 1.0.1+1
 
 environment:
   sdk: ^3.13.7
